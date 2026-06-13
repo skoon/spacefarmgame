@@ -388,6 +388,33 @@ SEASONAL_MODIFIERS = {
 
 WEATHER_DURATION = {"min": 2, "max": 4}
 
+FESTIVALS = {
+    "nebula": {
+        "name": "Harvest Moon Feast",
+        "season": "Nebula",
+        "day": 7,
+        "type": "crop_tasting",
+        "reward_item": "Nebula Seeds",
+        "reward_gold": 500,
+    },
+    "bloom": {
+        "name": "Alien Flower Show",
+        "season": "Bloom",
+        "day": 7,
+        "type": "flower_arrange",
+        "reward_item": "Starlight Melon Seeds",
+        "reward_gold": 300,
+    },
+    "solar": {
+        "name": "Starlight Dance",
+        "season": "Solar",
+        "day": 10,
+        "type": "rhythm",
+        "reward_item": "Quasar Berry Seeds",
+        "reward_gold": 200,
+    },
+}
+
 BAR_ITEMS = [
     {"name": "Nebula Nectar", "price": 15, "energy": 20, "color": (180, 100, 255)},
     {"name": "Glow-Ale",      "price": 10, "energy": 10, "color": (100, 220, 100)},

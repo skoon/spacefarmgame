@@ -65,6 +65,9 @@ def draw_hud():
     w_name = game.current_weather["name"]
     w_color = game.current_weather["color"] if game.current_weather["color"] else WHITE
     draw_text(screen, f"Weather: {w_name}", 750, 42, w_color, font_small)
+    if game.festival_today and not game.festival_active:
+        fest = FESTIVALS[game.festival_today]
+        draw_text(screen, f"★ {fest['name']} Today! Visit the Landing Pad! ★", SCREEN_WIDTH // 2, 60, GOLD, font_small, center=True)
     if game.gift_mode:
         draw_text(screen, "GIFT MODE", 750, 60, PINK, font_small)
 
@@ -351,6 +354,121 @@ def draw_particles():
         s.fill(c)
         screen.blit(s, (int(p["x"]), int(p["y"])))
 
+def draw_crop_tasting():
+    if not game.festival_active or game.festival_type != "crop_tasting":
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 500, 350
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (40, 20, 10), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (200, 150, 80), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "★ Harvest Moon Feast ★", px + panel_w // 2, py + 15, GOLD, font_large, center=True)
+    draw_text(screen, "Choose your best crop for the judges!", px + panel_w // 2, py + 45, WHITE, font_med, center=True)
+    if "result" in game.festival_data:
+        result = game.festival_data["result"]
+        draw_text(screen, result, px + panel_w // 2, py + 120, GOLD if "won" in result.lower() else WHITE, font_large, center=True)
+        draw_text(screen, "Press E to continue", px + panel_w // 2, py + panel_h - 30, LIGHT_GRAY, font_small, center=True)
+        return
+    crops = game.festival_data.get("crops", [])
+    for i, crop_key in enumerate(crops):
+        data = CROP_TYPES[crop_key]
+        yy = py + 90 + i * 70
+        pygame.draw.rect(screen, (60, 40, 20), (px + 30, yy, panel_w - 60, 55))
+        pygame.draw.rect(screen, (120, 80, 40), (px + 30, yy, panel_w - 60, 55), 1)
+        icon = get_crop_icon(crop_key)
+        screen.blit(icon, (px + 45, yy + 8))
+        draw_text(screen, data["name"], px + 75, yy + 8, WHITE, font_med)
+        draw_text(screen, f"Sell price: {data['sell_price']}g", px + 75, yy + 30, LIGHT_GRAY, font_small)
+        draw_text(screen, f"[{i+1}]", px + panel_w - 70, yy + 14, GOLD, font_med)
+    draw_text(screen, "1-3: Select crop | ESC: Leave", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
+
+def draw_flower_arrange():
+    if not game.festival_active or game.festival_type != "flower_arrange":
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 600, 450
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (20, 30, 20), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (80, 180, 80), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "★ Alien Flower Show ★", px + panel_w // 2, py + 12, GOLD, font_large, center=True)
+    timer = game.festival_data.get("timer", 0) // 10
+    draw_text(screen, f"Time: {timer}s", px + panel_w - 80, py + 16, RED if timer < 10 else WHITE, font_med)
+    draw_text(screen, "Match the target pattern!", px + panel_w // 2, py + 38, WHITE, font_small, center=True)
+    grid = game.festival_data.get("grid", [])
+    target = game.festival_data.get("target", [])
+    cursor = game.festival_data.get("cursor", [0, 0])
+    cell_size = 40
+    gap = 4
+    start_x = px + 40
+    start_y = py + 70
+    for r in range(4):
+        for c in range(4):
+            cx = start_x + c * (cell_size + gap)
+            cy = start_y + r * (cell_size + gap)
+            if r < len(grid) and c < len(grid[r]):
+                s = make_surface(cell_size, cell_size, grid[r][c])
+                screen.blit(s, (cx, cy))
+            draw_box(screen, cx, cy, cell_size, cell_size, (255, 255, 255), False)
+            if cursor[0] == r and cursor[1] == c:
+                draw_box(screen, cx - 1, cy - 1, cell_size + 2, cell_size + 2, GOLD, 2)
+    target_x = px + 340
+    target_y = py + 70
+    draw_text(screen, "Target:", target_x, target_y - 16, CYAN, font_small)
+    for r in range(4):
+        for c in range(4):
+            cx = target_x + c * (cell_size + gap)
+            cy = target_y + r * (cell_size + gap)
+            if r < len(target) and c < len(target[r]):
+                s = make_surface(cell_size, cell_size, target[r][c])
+                screen.blit(s, (cx, cy))
+            draw_box(screen, cx, cy, cell_size, cell_size, (255, 255, 255), False)
+    draw_text(screen, "Arrows: Move  SPACE: Swap  ENTER: Submit", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
+
+def draw_rhythm():
+    if not game.festival_active or game.festival_type != "rhythm":
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 500, 350
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (20, 10, 40), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (180, 100, 200), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "★ Starlight Dance ★", px + panel_w // 2, py + 15, PINK, font_large, center=True)
+    seq = game.festival_data.get("sequence", [])
+    idx = game.festival_data.get("index", 0)
+    misses = game.festival_data.get("misses", 0)
+    total = len(seq)
+    score = total - misses
+    draw_text(screen, f"Step {min(idx+1, total)}/{total}  |  Score: {score}/{total}", px + panel_w // 2, py + 42, WHITE, font_med, center=True)
+    arrow_names = {"UP": "↑", "DOWN": "↓", "LEFT": "←", "RIGHT": "→"}
+    if "result" in game.festival_data:
+        draw_text(screen, game.festival_data["result"], px + panel_w // 2, py + 120, GOLD, font_large, center=True)
+        draw_text(screen, "Press E to continue", px + panel_w // 2, py + panel_h - 30, LIGHT_GRAY, font_small, center=True)
+        return
+    arrow_y = py + 100
+    next_arrow = seq[idx] if idx < total else "?"
+    draw_text(screen, "Press the arrow key:", px + panel_w // 2, arrow_y, WHITE, font_med, center=True)
+    draw_text(screen, arrow_names.get(next_arrow, "?"), px + panel_w // 2, arrow_y + 40, GOLD, font_large, center=True)
+    draw_text(screen, "Then SPACE to confirm", px + panel_w // 2, arrow_y + 80, LIGHT_GRAY, font_small, center=True)
+
+def draw_festival():
+    if not game.festival_active:
+        return
+    if game.festival_type == "crop_tasting":
+        draw_crop_tasting()
+    elif game.festival_type == "flower_arrange":
+        draw_flower_arrange()
+    elif game.festival_type == "rhythm":
+        draw_rhythm()
+
 def blend_colors(c1, c2, alpha):
     return (
         int(c1[0] * (1 - alpha) + c2[0] * alpha),
@@ -623,6 +741,8 @@ def draw_help():
         "?                Toggle this help",
         "ESC              Quit game",
         "",
+        "E near landing pad Enter festival (on festival days)",
+        "",
         "Note: Weather & seasons affect crop growth.",
         "Nebula (fast) > Bloom > Solar > Void (slow)",
     ]
@@ -669,6 +789,86 @@ def handle_events():
             if event.unicode == '?':
                 game.help_active = not game.help_active
                 continue
+            if game.festival_active:
+                if game.festival_type == "crop_tasting":
+                    if "result" in game.festival_data:
+                        if event.key == pygame.K_e:
+                            game.end_festival(game.festival_data.get("won", False))
+                    else:
+                        for i in range(3):
+                            if event.key == getattr(pygame, f"K_{i+1}"):
+                                crops = game.festival_data.get("crops", [])
+                                if i < len(crops):
+                                    chosen = crops[i]
+                                    price = CROP_TYPES[chosen]["sell_price"]
+                                    score = price * random.uniform(0.8, 1.2)
+                                    threshold = game.festival_data.get("threshold", 50)
+                                    won = score >= threshold
+                                    game.festival_data["won"] = won
+                                    game.festival_data["result"] = f"Score: {score:.0f}! You won!" if won else f"Score: {score:.0f}. Not enough for the judges."
+                                    game.festival_data["over"] = True
+                                    game.player.remove_item(chosen, 1)
+                elif game.festival_type == "flower_arrange":
+                    if event.key == pygame.K_ESCAPE:
+                        game.end_festival(False)
+                    elif event.key == pygame.K_UP:
+                        game.festival_data["cursor"][0] = max(0, game.festival_data["cursor"][0] - 1)
+                    elif event.key == pygame.K_DOWN:
+                        game.festival_data["cursor"][0] = min(3, game.festival_data["cursor"][0] + 1)
+                    elif event.key == pygame.K_LEFT:
+                        game.festival_data["cursor"][1] = max(0, game.festival_data["cursor"][1] - 1)
+                    elif event.key == pygame.K_RIGHT:
+                        game.festival_data["cursor"][1] = min(3, game.festival_data["cursor"][1] + 1)
+                    elif event.key == pygame.K_SPACE:
+                        r, c = game.festival_data["cursor"]
+                        grid = game.festival_data["grid"]
+                        if event.key == pygame.K_SPACE:
+                            dirs = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+                            for dr, dc in dirs:
+                                nr, nc = r + dr, c + dc
+                                if 0 <= nr < 4 and 0 <= nc < 4:
+                                    grid[r][c], grid[nr][nc] = grid[nr][nc], grid[r][c]
+                                    break
+                    elif event.key == pygame.K_RETURN:
+                        if game.festival_data.get("grid") == game.festival_data.get("target"):
+                            game.festival_data["won"] = True
+                            game.festival_data["over"] = True
+                            game.festival_data["result"] = "Perfect arrangement! You won!"
+                        else:
+                            game.set_message("Not quite right. Keep trying!")
+                elif game.festival_type == "rhythm":
+                    if "result" in game.festival_data:
+                        if event.key == pygame.K_e:
+                            game.end_festival(game.festival_data.get("won", False))
+                        continue
+                    key_map = {
+                        pygame.K_UP: "UP", pygame.K_DOWN: "DOWN",
+                        pygame.K_LEFT: "LEFT", pygame.K_RIGHT: "RIGHT",
+                    }
+                    if game.festival_data.get("cooldown", 0) > 0:
+                        game.festival_data["cooldown"] -= 1
+                    if event.key in key_map and game.festival_data.get("cooldown", 0) == 0:
+                        pressed = key_map[event.key]
+                        idx = game.festival_data.get("index", 0)
+                        seq = game.festival_data.get("sequence", [])
+                        if idx < len(seq) and pressed == seq[idx]:
+                            game.festival_data["index"] = idx + 1
+                            game.festival_data["cooldown"] = 15
+                            if idx + 1 >= len(seq):
+                                misses = game.festival_data.get("misses", 0)
+                                score = len(seq) - misses
+                                won = score >= 7
+                                game.festival_data["won"] = won
+                                game.festival_data["result"] = f"Perfect dance! You won!" if won else f"Scored {score}/10. Not quite enough."
+                                game.festival_data["over"] = True
+                        elif pressed != "UP" and pressed != "DOWN" and pressed != "LEFT" and pressed != "RIGHT":
+                            pass
+                        else:
+                            game.festival_data["misses"] = game.festival_data.get("misses", 0) + 1
+                            game.festival_data["index"] += 1
+                            game.festival_data["cooldown"] = 15
+                continue
+
             if game.seed_select_active:
                 available = [c for c in CROP_ORDER if CROP_TYPES[c]["seed_name"] in game.player.inventory]
                 if event.key == pygame.K_q:
@@ -827,7 +1027,7 @@ def handle_events():
                 game.save_game()
 
     keys = pygame.key.get_pressed()
-    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.hangar_active and not game.planet_explore_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt and not game.bar_active:
+    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.hangar_active and not game.planet_explore_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt and not game.bar_active and not game.festival_active:
         dx, dy = 0, 0
         if keys[pygame.K_w] or keys[pygame.K_UP]:
             dy = -1
@@ -928,6 +1128,8 @@ def render():
         draw_seed_select()
     if game.sleep_prompt:
         draw_sleep_prompt()
+    if game.festival_active:
+        draw_festival()
     if game.help_active:
         draw_help()
 

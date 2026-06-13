@@ -278,6 +278,10 @@ class GameState:
         self.current_weather = WEATHER_EVENTS[0]
         self.weather_timer = random.randint(WEATHER_DURATION["min"], WEATHER_DURATION["max"])
         self.weather_particles = []
+        self.festival_today = None
+        self.festival_active = False
+        self.festival_type = None
+        self.festival_data = {}
 
     def add_particles(self, x, y, color, count=8):
         for _ in range(count):
@@ -356,7 +360,7 @@ class GameState:
             weights = SEASONAL_MODIFIERS[SEASONS[self.season_index]]["weather_weights"]
             self.current_weather = random.choices(WEATHER_EVENTS, weights=weights)[0]
             self.weather_timer = random.randint(WEATHER_DURATION["min"], WEATHER_DURATION["max"])
-            self.weather_particles = []
+        self.weather_particles = []
 
     def update_season(self):
         self.day_in_season += 1
@@ -382,6 +386,13 @@ class GameState:
         self.player.energy = self.player.max_energy
         self.update_weather()
         self.update_season()
+        season_name = SEASONS[self.season_index]
+        self.festival_today = None
+        for key, fest in FESTIVALS.items():
+            if fest["season"] == season_name and fest["day"] == self.day_in_season:
+                self.festival_today = key
+                self.set_message(f"Today: {fest['name']}! Visit the Space Port!")
+                break
         self.run_bots()
         for npc in self.npcs:
             npc.talked_today = False
@@ -725,6 +736,9 @@ class GameState:
                                 return
                 self.start_bar()
                 return
+            if self.festival_today and 12 <= px <= 17 and 16 <= py <= 19:
+                self.start_festival()
+                return
             for npc in self.npcs:
                 if npc.location in ["house1", "house2", "house3", "house4"]:
                     hx, hy = npc.base_tile_x, npc.base_tile_y
@@ -911,3 +925,49 @@ class GameState:
             self.dialogue_npc = None
             self.add_particles(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, PINK, 40)
             self.add_particles(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, GOLD, 30)
+
+    def start_festival(self):
+        if not self.festival_today:
+            return
+        fest = FESTIVALS[self.festival_today]
+        self.festival_active = True
+        self.festival_type = fest["type"]
+        self.festival_data = {"round": 0, "score": 0, "won": False, "over": False}
+        if self.festival_type == "crop_tasting":
+            available = [c for c in CROP_ORDER if c in self.player.inventory]
+            if len(available) < 1:
+                self.set_message("You need at least one crop to enter!")
+                self.festival_active = False
+                self.festival_type = None
+                return
+            random.shuffle(available)
+            self.festival_data["crops"] = available[:min(3, len(available))]
+            self.festival_data["threshold"] = max(CROP_TYPES[c]["sell_price"] for c in available) * 0.5
+        elif self.festival_type == "flower_arrange":
+            colors = [(255, 80, 80), (80, 200, 80), (80, 120, 255), (255, 200, 80)]
+            self.festival_data["grid"] = [[random.choice(colors) for _ in range(4)] for _ in range(4)]
+            self.festival_data["target"] = [[random.choice(colors) for _ in range(4)] for _ in range(4)]
+            self.festival_data["timer"] = 600
+            self.festival_data["cursor"] = [0, 0]
+        elif self.festival_type == "rhythm":
+            arrows = ["UP", "DOWN", "LEFT", "RIGHT"]
+            self.festival_data["sequence"] = [random.choice(arrows) for _ in range(10)]
+            self.festival_data["index"] = 0
+            self.festival_data["misses"] = 0
+            self.festival_data["cooldown"] = 0
+
+    def end_festival(self, won=False):
+        fest = FESTIVALS[self.festival_today] if self.festival_today else None
+        if won and fest:
+            self.player.add_item(fest["reward_item"])
+            self.player.gold += fest["reward_gold"]
+            for npc in self.npcs:
+                npc.heart_level = min(10, npc.heart_level + 1)
+            self.set_message(f"You won the {fest['name']}! +{fest['reward_gold']}g, {fest['reward_item']}, +1♥ all NPCs!")
+            self.add_particles(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, GOLD, 30)
+            self.add_particles(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, PINK, 30)
+        elif fest:
+            self.set_message(f"You didn't win the {fest['name']}. Better luck next time!")
+        self.festival_active = False
+        self.festival_type = None
+        self.festival_data = {}
