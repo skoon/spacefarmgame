@@ -219,6 +219,14 @@ SPACEPORT_TILES_X = 30
 SPACEPORT_TILES_Y = 20
 
 BOT_TYPES = {
+    "water_bot": {
+        "name": "Water-Bot",
+        "action": "water",
+        "range": 2,
+        "cost": 300,
+        "upkeep": 2,
+        "color": (80, 180, 255),
+    },
     "sprout_bot": {
         "name": "Sprout-Bot",
         "action": "water",

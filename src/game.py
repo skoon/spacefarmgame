@@ -341,6 +341,15 @@ class GameState:
             self.bots.append(bot)
         return True
 
+    def reactivate_bot(self, bot):
+        cost = BOT_TYPES[bot.bot_type]["upkeep"]
+        if self.player.gold >= cost:
+            self.player.gold -= cost
+            bot.active = True
+            self.set_message(f"{BOT_TYPES[bot.bot_type]['name']} reactivated! ({cost}g)")
+        else:
+            self.set_message(f"Need {cost}g to reactivate {BOT_TYPES[bot.bot_type]['name']}.")
+
     def get_tile_at(self, tx, ty):
         if self.player.current_map == "farm":
             tx -= FARM_TILES_OFFSET_X
@@ -428,6 +437,13 @@ class GameState:
         py = self.player.y // TILE_SIZE
 
         if self.player.current_map == "farm":
+            for bot in self.bots:
+                wx = bot.array_x + FARM_TILES_OFFSET_X
+                wy = bot.array_y + FARM_TILES_OFFSET_Y
+                if abs(px - wx) <= 0 and abs(py - wy) <= 0:
+                    if not bot.active:
+                        self.reactivate_bot(bot)
+                        return
             if abs(px - 8) <= 1 and abs(py - 2) <= 1:
                 self.sleep_prompt = True
                 return

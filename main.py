@@ -147,7 +147,7 @@ def draw_bot_shop():
     overlay.set_alpha(200)
     overlay.fill((0, 0, 20))
     screen.blit(overlay, (0, 0))
-    panel_w, panel_h = 550, 260
+    panel_w, panel_h = 550, 330
     px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
     pygame.draw.rect(screen, (20, 20, 40), (px, py, panel_w, panel_h))
     pygame.draw.rect(screen, (80, 120, 180), (px, py, panel_w, panel_h), 3)
@@ -163,7 +163,7 @@ def draw_bot_shop():
         draw_text(screen, bt["name"], px + 70, yy + 6, WHITE, font_med)
         draw_text(screen, f"Range: {bt['range']} tiles | Upkeep: {bt['upkeep']}g/day", px + 70, yy + 28, LIGHT_GRAY, font_small)
         draw_text(screen, f"[{i+1}] {bt['cost']}g", px + panel_w - 80, yy + 14, GOLD, font_med)
-    draw_text(screen, "1-2: Buy | ESC: Exit", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
+    draw_text(screen, "1-3: Buy | ESC: Exit", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
 
 def draw_inventory():
     if not game.inventory_active:
@@ -309,13 +309,21 @@ def draw_farm():
 
     # Farm bots
     for bot in game.bots:
-        if not bot.active:
-            continue
         bx = (bot.array_x + FARM_TILES_OFFSET_X) * TILE_SIZE
         by = (bot.array_y + FARM_TILES_OFFSET_Y) * TILE_SIZE
         bot_surf = get_bot_surf(bot.bot_type)
+        if not bot.active:
+            dim = pygame.Surface((TILE_SIZE, TILE_SIZE))
+            dim.set_alpha(140)
+            dim.fill((60, 60, 60))
+            bot_surf = bot_surf.copy()
+            bot_surf.blit(dim, (0, 0))
         screen.blit(bot_surf, (bx, by))
-        draw_text(screen, BOT_TYPES[bot.bot_type]["name"], bx + TILE_SIZE // 2, by - 8, WHITE, font_small, center=True)
+        label_color = LIGHT_GRAY if not bot.active else WHITE
+        label = BOT_TYPES[bot.bot_type]["name"]
+        if not bot.active:
+            label += " (off)"
+        draw_text(screen, label, bx + TILE_SIZE // 2, by - 8, label_color, font_small, center=True)
 
     # Placement ghost
     if game.placement_mode and game.player.current_map == "farm":
