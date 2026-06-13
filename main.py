@@ -60,6 +60,8 @@ def draw_hud():
     tool_names = ["Hoe", "Water", "Scythe"]
     draw_text(screen, f"Tool: {tool_names[game.player.selected_tool]}", 650, 6, WHITE, font_small)
     draw_text(screen, f"Map: {game.player.current_map.upper()}", 800, 6, CYAN, font_small)
+    if game.gift_mode:
+        draw_text(screen, "GIFT MODE", 750, 24, PINK, font_small)
 
 def draw_message():
     if game.message_timer > 0:
@@ -92,9 +94,10 @@ def draw_dialogue():
     for h in range(npc.heart_level):
         screen.blit(heart_surf, (30 + h * 14, box_y + 8))
     draw_text(screen, f"{npc.name} the {npc.species}", 30, box_y + 24, WHITE, font_med)
+    draw_text(screen, f'"{npc.bio}"', 30, box_y + 44, LIGHT_GRAY, font_small)
     if game.dialogue_index < len(game.dialogue_lines):
         line = game.dialogue_lines[game.dialogue_index]
-        draw_text(screen, line, 30, box_y + 50, (220, 220, 255), font_small)
+        draw_text(screen, line, 30, box_y + 66, (220, 220, 255), font_small)
     draw_text(screen, "Press E to continue", SCREEN_WIDTH // 2, box_y + box_h - 24, LIGHT_GRAY, font_small, center=True)
 
     if npc.romanceable:
@@ -290,7 +293,7 @@ def draw_relationship_bar():
     for npc in game.npcs:
         dx = abs(px - npc.tile_x)
         dy = abs(py - npc.tile_y)
-        if dx <= 4 and dy <= 4:
+        if dx <= 3 and dy <= 3:
             nearby.append(npc)
     if not nearby:
         return
@@ -539,6 +542,7 @@ def draw_help():
         "4                Plant seeds",
         "H (spaceport)    Spaceship hangar",
         "B (spaceport)    Bot workshop",
+        "G (spaceport)    Gift mode (E to give to NPC)",
         "U / R (hangar)   Upgrade ship / Refuel",
         "I                Toggle inventory",
         "M                Toggle map (farm/spaceport)",
@@ -716,6 +720,13 @@ def handle_events():
                     game.player.x = game.player.farm_x
                     game.player.y = game.player.farm_y
                     game.set_message("Back on the farm!")
+            elif event.key == pygame.K_g:
+                if game.player.current_map == "spaceport":
+                    game.gift_mode = not game.gift_mode
+                    if game.gift_mode:
+                        game.set_message("Gift mode on! Walk near an NPC and press E to give an item.")
+                    else:
+                        game.set_message("Gift mode off.")
             elif event.key == pygame.K_h:
                 if game.player.current_map == "spaceport":
                     game.hangar_active = True
@@ -828,7 +839,7 @@ def render():
 
 def main():
     show_title_card()
-    game.set_message("Welcome to Space Farm Galaxy! Head to the Space Port (M) to meet everyone. Press B for bots!")
+    game.set_message("Welcome to Space Farm Galaxy! Press G at the port to give gifts to NPCs!")
 
     while game.running:
         handle_events()

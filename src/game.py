@@ -149,46 +149,78 @@ class NPC:
         self.heart_level = 0
         self.talked_today = False
         self.dialogue_state = "intro"
+        self.schedule = defn.get("schedule", [])
+        self.base_tile_x = 10
+        self.base_tile_y = 10
 
         if self.location == "shop":
-            self.map_x, self.map_y = 10, 10
+            self.base_tile_x, self.base_tile_y = 10, 10
             self.screen = "spaceport"
-            self.tile_x, self.tile_y = 10, 10
         elif self.location == "bar":
-            self.map_x, self.map_y = 16, 10
+            self.base_tile_x, self.base_tile_y = 16, 10
             self.screen = "spaceport"
-            self.tile_x, self.tile_y = 16, 10
         elif self.location == "house1":
-            self.map_x, self.map_y = 6, 17
+            self.base_tile_x, self.base_tile_y = 6, 17
             self.screen = "spaceport"
-            self.tile_x, self.tile_y = 6, 17
         elif self.location == "house2":
-            self.map_x, self.map_y = 13, 17
+            self.base_tile_x, self.base_tile_y = 13, 17
             self.screen = "spaceport"
-            self.tile_x, self.tile_y = 13, 17
         elif self.location == "house3":
-            self.map_x, self.map_y = 20, 17
+            self.base_tile_x, self.base_tile_y = 20, 17
             self.screen = "spaceport"
-            self.tile_x, self.tile_y = 20, 17
         elif self.location == "house4":
-            self.map_x, self.map_y = 26, 17
+            self.base_tile_x, self.base_tile_y = 26, 17
             self.screen = "spaceport"
-            self.tile_x, self.tile_y = 26, 17
         else:
-            self.map_x, self.map_y = 10, 10
+            self.base_tile_x, self.base_tile_y = 10, 10
             self.screen = "spaceport"
-            self.tile_x, self.tile_y = 10, 10
+
+        self.tile_x = self.base_tile_x
+        self.tile_y = self.base_tile_y
+        self.pixel_offset_x = 0
+        self.pixel_offset_y = 0
+        self.move_target = None
+        self.last_schedule_time = -1
+
+    def update_schedule(self, time_slot):
+        if time_slot == self.last_schedule_time:
+            return
+        self.last_schedule_time = time_slot
+        if not self.schedule:
+            return
+        best_entry = None
+        for entry in self.schedule:
+            if entry[0] == time_slot:
+                best_entry = entry
+                break
+            if entry[0] > time_slot:
+                if best_entry is None or entry[0] < best_entry[0]:
+                    best_entry = entry
+        if best_entry is None and self.schedule:
+            best_entry = self.schedule[0]
+        if best_entry:
+            next_x, next_y = best_entry[1], best_entry[2]
+            if (next_x, next_y) != (self.tile_x, self.tile_y):
+                self.tile_x, self.tile_y = next_x, next_y
 
     def get_dialogue(self):
-        if self.heart_level >= 8:
-            key = "friendly"
-        elif self.heart_level >= 4:
+        if self.heart_level >= 4:
             key = "friendly"
         elif self.heart_level >= 1:
             key = "neutral"
         else:
             key = "intro"
-        return self.dialogues.get(key, self.dialogues["intro"])
+        lines = self.dialogues.get(key, self.dialogues["intro"])
+        if isinstance(lines, str):
+            return lines
+        return random.choice(lines)
+
+    def get_gift_response(self, item_key):
+        if item_key in self.loves:
+            return self.dialogues.get("gift_love", "Wow, I love this!")
+        elif item_key in self.likes:
+            return self.dialogues.get("gift_like", "Thanks, I like this!")
+        return self.dialogues.get("gift_neutral", "Thanks.")
 
 class FarmBot:
     def __init__(self, bot_type, array_x, array_y):
@@ -231,6 +263,7 @@ class GameState:
         self.bot_shop_active = False
         self.placement_mode = None
         self.bots = []
+        self.gift_mode = False
         self.ship_tier = 0
         self.fuel = SHIP_TIERS[0]["fuel_capacity"]
         self.ship_cargo = {}
@@ -270,6 +303,8 @@ class GameState:
         while self.time_progress >= 1.0:
             self.time_progress -= 1.0
             self.time_slot += 1
+            for npc in self.npcs:
+                npc.update_schedule(self.time_slot)
             if self.time_slot >= len(TIME_NAMES):
                 self.advance_day()
 
@@ -361,6 +396,38 @@ class GameState:
             self.set_message(f"{BOT_TYPES[bot.bot_type]['name']} reactivated! ({cost}g)")
         else:
             self.set_message(f"Need {cost}g to reactivate {BOT_TYPES[bot.bot_type]['name']}.")
+
+    def give_gift(self, npc):
+        if not self.gift_mode:
+            return False
+        available = [item for item in self.player.inventory if item not in [CROP_TYPES[c]["seed_name"] for c in CROP_ORDER]]
+        if not available:
+            self.set_message("You don't have anything to give.")
+            self.gift_mode = False
+            return True
+        item = available[0]
+        if not self.player.has_item(item):
+            self.set_message(f"You don't have {item}.")
+            return True
+        self.player.remove_item(item, 1)
+        response = npc.get_gift_response(item)
+        if item in npc.loves:
+            gain = 2
+        elif item in npc.likes:
+            gain = 1
+        else:
+            gain = 0
+        if gain > 0:
+            old = npc.heart_level
+            npc.heart_level = min(10, npc.heart_level + gain)
+            self.dialogue_lines = [f"{npc.name}: {response}", f"♥ +{gain} hearts! ({npc.heart_level}/10)"]
+        else:
+            self.dialogue_lines = [f"{npc.name}: {response}"]
+        self.dialogue_active = True
+        self.dialogue_npc = npc
+        self.dialogue_index = 0
+        self.gift_mode = False
+        return True
 
     def get_tile_at(self, tx, ty):
         if self.player.current_map == "farm":
@@ -556,7 +623,10 @@ class GameState:
             for npc in self.npcs:
                 dx = abs(px - npc.tile_x)
                 dy = abs(py - npc.tile_y)
-                if dx <= 2 and dy <= 2:
+                if dx <= 1 and dy <= 1:
+                    if self.gift_mode:
+                        if self.give_gift(npc):
+                            return
                     self.start_dialogue(npc)
                     return
 
@@ -566,12 +636,18 @@ class GameState:
             if 13 <= px <= 17 and 4 <= py <= 8:
                 for npc in self.npcs:
                     if npc.id == "blip":
+                        if self.gift_mode:
+                            if self.give_gift(npc):
+                                return
                         self.start_dialogue(npc)
                         return
             for npc in self.npcs:
                 if npc.location in ["house1", "house2", "house3", "house4"]:
-                    hx, hy = npc.tile_x, npc.tile_y
+                    hx, hy = npc.base_tile_x, npc.base_tile_y
                     if abs(px - hx) <= 2 and abs(py - hy) <= 2:
+                        if self.gift_mode:
+                            if self.give_gift(npc):
+                                return
                         self.start_dialogue(npc)
                         return
 
@@ -655,8 +731,6 @@ class GameState:
             rects.append(pygame.Rect(15 * ts, 2 * ts, 3 * ts, 3 * ts))
             for hx, hy in [(5, 14), (12, 14), (19, 14), (25, 14)]:
                 rects.append(pygame.Rect(hx * ts, hy * ts, 3 * ts, 3 * ts))
-            for npc in self.npcs:
-                rects.append(pygame.Rect(npc.tile_x * ts, npc.tile_y * ts, ts, ts))
         return rects
 
     def buy_bot(self, bot_type):
