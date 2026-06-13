@@ -60,8 +60,13 @@ def draw_hud():
     tool_names = ["Hoe", "Water", "Scythe"]
     draw_text(screen, f"Tool: {tool_names[game.player.selected_tool]}", 650, 6, WHITE, font_small)
     draw_text(screen, f"Map: {game.player.current_map.upper()}", 800, 6, CYAN, font_small)
+    season_name = SEASONS[game.season_index]
+    draw_text(screen, f"{season_name} Season", 750, 26, SEASONAL_MODIFIERS[season_name]["sky_tint"], font_small)
+    w_name = game.current_weather["name"]
+    w_color = game.current_weather["color"] if game.current_weather["color"] else WHITE
+    draw_text(screen, f"Weather: {w_name}", 750, 42, w_color, font_small)
     if game.gift_mode:
-        draw_text(screen, "GIFT MODE", 750, 24, PINK, font_small)
+        draw_text(screen, "GIFT MODE", 750, 60, PINK, font_small)
 
 def draw_message():
     if game.message_timer > 0:
@@ -142,6 +147,29 @@ def draw_shop():
         draw_text(screen, f"[{sell_keys[i]}]", px + panel_w - 50, yy + 4, ORANGE, font_small)
 
     draw_text(screen, "ESC: Exit Shop", px + panel_w // 2, py + panel_h - 30, LIGHT_GRAY, font_med, center=True)
+
+def draw_bar():
+    if not game.bar_active:
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 500, 350
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (30, 10, 40), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (180, 80, 180), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "~ Cosmic Comet Bar ~", px + panel_w // 2, py + 15, PINK, font_large, center=True)
+    draw_text(screen, f"Gold: {game.player.gold}g  |  Energy: {game.player.energy}/{game.player.max_energy}", px + panel_w // 2, py + 42, GOLD, font_med, center=True)
+    for i, item in enumerate(BAR_ITEMS):
+        yy = py + 80 + i * 55
+        pygame.draw.rect(screen, (40, 20, 50), (px + 20, yy, panel_w - 40, 45))
+        pygame.draw.rect(screen, (100, 60, 120), (px + 20, yy, panel_w - 40, 45), 1)
+        draw_text(screen, item["name"], px + 40, yy + 6, WHITE, font_med)
+        draw_text(screen, f"+{item['energy']} Energy", px + 40, yy + 28, ENERGY_GREEN, font_small)
+        draw_text(screen, f"{item['price']}g", px + panel_w - 80, yy + 10, GOLD, font_med)
+        draw_text(screen, f"[{i+1}]", px + panel_w - 120, yy + 10, GOLD, font_small)
+    draw_text(screen, "1-4: Buy | ESC: Exit", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
 
 def draw_bot_shop():
     if not game.bot_shop_active:
@@ -323,6 +351,23 @@ def draw_particles():
         s.fill(c)
         screen.blit(s, (int(p["x"]), int(p["y"])))
 
+def blend_colors(c1, c2, alpha):
+    return (
+        int(c1[0] * (1 - alpha) + c2[0] * alpha),
+        int(c1[1] * (1 - alpha) + c2[1] * alpha),
+        int(c1[2] * (1 - alpha) + c2[2] * alpha),
+    )
+
+def draw_weather_particles():
+    for p in game.weather_particles:
+        alpha = int(255 * p["life"] / max(p["max_life"], 1))
+        size = p["size"]
+        s = pygame.Surface((size, size))
+        s.set_alpha(alpha)
+        c = p["color"]
+        s.fill(c)
+        screen.blit(s, (int(p["x"]), int(p["y"])))
+
 def draw_farm():
     bg = (20, 15, 40)
     screen.fill(bg)
@@ -330,6 +375,14 @@ def draw_farm():
     time_colors = [(80, 120, 200), (120, 160, 230), (160, 200, 255), (180, 160, 120),
                    (220, 140, 80), (200, 100, 60), (60, 40, 80), (15, 10, 40)]
     sky_color = time_colors[min(game.time_slot, len(time_colors) - 1)]
+    season_name = SEASONS[game.season_index]
+    tint = SEASONAL_MODIFIERS[season_name]["sky_tint"]
+    sky_color = blend_colors(sky_color, tint, 0.25)
+    w_name = game.current_weather["name"]
+    if w_name == "Void Fog":
+        sky_color = blend_colors(sky_color, (60, 40, 80), 0.4)
+    elif w_name == "Solar Flare":
+        sky_color = blend_colors(sky_color, (255, 200, 100), 0.15)
     screen.fill(sky_color)
 
     if game.time_slot >= 4:
@@ -447,6 +500,14 @@ def draw_spaceport():
     time_colors = [(80, 120, 200), (120, 160, 230), (160, 200, 255), (180, 160, 120),
                    (220, 140, 80), (200, 100, 60), (60, 40, 80), (15, 10, 40)]
     sky_color = time_colors[min(game.time_slot, len(time_colors) - 1)]
+    season_name = SEASONS[game.season_index]
+    tint = SEASONAL_MODIFIERS[season_name]["sky_tint"]
+    sky_color = blend_colors(sky_color, tint, 0.25)
+    w_name = game.current_weather["name"]
+    if w_name == "Void Fog":
+        sky_color = blend_colors(sky_color, (60, 40, 80), 0.4)
+    elif w_name == "Solar Flare":
+        sky_color = blend_colors(sky_color, (255, 200, 100), 0.15)
     screen.fill(sky_color)
 
     if game.time_slot >= 4:
@@ -479,11 +540,22 @@ def draw_spaceport():
     # Buildings
     shop_b = get_building_surf("shop")
     screen.blit(shop_b, (8 * TILE_SIZE, 2 * TILE_SIZE))
-    draw_text(screen, "General Store", 11 * TILE_SIZE, 1 * TILE_SIZE, GOLD, font_small, center=True)
+    sign_y = 2 * TILE_SIZE - 28
+    sign_cx = 11 * TILE_SIZE
+    draw_box(screen, sign_cx - 60, sign_y, 120, 20, (60, 40, 80), True)
+    draw_box(screen, sign_cx - 2, sign_y + 20, 4, 8, (80, 60, 100), True)
+    draw_box(screen, sign_cx + 16, sign_y + 20, 4, 8, (80, 60, 100), True)
+    draw_box(screen, sign_cx - 60, sign_y, 120, 20, (140, 100, 180), 3)
+    draw_text(screen, "GENERAL STORE", sign_cx, sign_y + 10, GOLD, font_small, center=True)
 
     bar_b = get_building_surf("bar")
     screen.blit(bar_b, (15 * TILE_SIZE, 2 * TILE_SIZE))
-    draw_text(screen, "Cosmic Comet Bar", 18 * TILE_SIZE, 1 * TILE_SIZE, PINK, font_small, center=True)
+    sign_cx = 18 * TILE_SIZE
+    draw_box(screen, sign_cx - 60, sign_y, 120, 20, (50, 20, 20), True)
+    draw_box(screen, sign_cx - 2, sign_y + 20, 4, 8, (70, 30, 30), True)
+    draw_box(screen, sign_cx + 16, sign_y + 20, 4, 8, (70, 30, 30), True)
+    draw_box(screen, sign_cx - 60, sign_y, 120, 20, (180, 80, 120), 2)
+    draw_text(screen, "COSMIC COMET", sign_cx, sign_y + 10, PINK, font_small, center=True)
 
     house_positions = [(5, 14), (12, 14), (19, 14), (25, 14)]
     house_labels = ["Nova's Home", "Pip's Home", "Luna's Home", "Rex's Home"]
@@ -542,6 +614,7 @@ def draw_help():
         "4                Plant seeds",
         "H (spaceport)    Spaceship hangar",
         "B (spaceport)    Bot workshop",
+        "E near bar       Open bar menu",
         "G (spaceport)    Gift mode (E to give to NPC)",
         "U / R (hangar)   Upgrade ship / Refuel",
         "I                Toggle inventory",
@@ -549,6 +622,9 @@ def draw_help():
         "S                Save game",
         "?                Toggle this help",
         "ESC              Quit game",
+        "",
+        "Note: Weather & seasons affect crop growth.",
+        "Nebula (fast) > Bloom > Solar > Void (slow)",
     ]
     y_start = SCREEN_HEIGHT // 2 - len(lines) * 12
     for i, line in enumerate(lines):
@@ -618,6 +694,15 @@ def handle_events():
                         game.buy_item(crop_key)
                     if i < len(sell_keys) and event.key == sell_keys[i]:
                         game.sell_item(crop_key)
+                continue
+
+            if game.bar_active:
+                if event.key == pygame.K_ESCAPE:
+                    game.bar_active = False
+                    game.subscreen = None
+                for i in range(len(BAR_ITEMS)):
+                    if event.key == getattr(pygame, f"K_{i+1}"):
+                        game.buy_bar_item(i)
                 continue
 
             if game.bot_shop_active:
@@ -742,7 +827,7 @@ def handle_events():
                 game.save_game()
 
     keys = pygame.key.get_pressed()
-    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.hangar_active and not game.planet_explore_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt:
+    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.hangar_active and not game.planet_explore_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt and not game.bar_active:
         dx, dy = 0, 0
         if keys[pygame.K_w] or keys[pygame.K_UP]:
             dy = -1
@@ -817,6 +902,13 @@ def render():
     draw_relationship_bar()
     draw_message()
     draw_particles()
+    draw_weather_particles()
+
+    if game.current_weather["name"] == "Void Fog":
+        fog = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        fog.set_alpha(60)
+        fog.fill((60, 40, 80))
+        screen.blit(fog, (0, 0))
 
     if game.dialogue_active:
         draw_dialogue()
@@ -826,6 +918,8 @@ def render():
         draw_hangar()
     if game.bot_shop_active:
         draw_bot_shop()
+    if game.bar_active:
+        draw_bar()
     if game.planet_explore_active:
         draw_planet_explore()
     if game.inventory_active:
@@ -844,6 +938,7 @@ def main():
     while game.running:
         handle_events()
         game.update_particles()
+        game.update_weather_particles()
 
         if game.message_timer > 0:
             game.message_timer -= 1

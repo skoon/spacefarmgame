@@ -47,9 +47,9 @@ class Tile:
             return True
         return False
 
-    def grow(self):
+    def grow(self, growth_rate=1.0):
         if self.crop and self.watered:
-            self.crop_timer += 1
+            self.crop_timer += growth_rate
             data = CROP_TYPES.get(self.crop_type)
             if data:
                 stages = data["growth_stages"]
@@ -264,6 +264,7 @@ class GameState:
         self.placement_mode = None
         self.bots = []
         self.gift_mode = False
+        self.bar_active = False
         self.ship_tier = 0
         self.fuel = SHIP_TIERS[0]["fuel_capacity"]
         self.ship_cargo = {}
@@ -272,6 +273,11 @@ class GameState:
         self.planet_turns_left = 0
         self.planet_explore_active = False
         self.planet_log = []
+        self.season_index = 0
+        self.day_in_season = 0
+        self.current_weather = WEATHER_EVENTS[0]
+        self.weather_timer = random.randint(WEATHER_DURATION["min"], WEATHER_DURATION["max"])
+        self.weather_particles = []
 
     def add_particles(self, x, y, color, count=8):
         for _ in range(count):
@@ -294,9 +300,70 @@ class GameState:
             if p["life"] <= 0:
                 self.particles.remove(p)
 
+    def update_weather_particles(self):
+        weather = self.current_weather["name"]
+        if weather == "Alien Rain":
+            if random.random() < 0.3:
+                self.weather_particles.append({
+                    "x": random.randint(0, SCREEN_WIDTH),
+                    "y": -10,
+                    "vx": random.uniform(-0.5, 0.5),
+                    "vy": random.uniform(4, 7),
+                    "life": random.randint(30, 60),
+                    "max_life": 60,
+                    "color": (100, 150, 255),
+                    "size": random.randint(1, 3),
+                })
+        elif weather == "Meteor Shower":
+            if random.random() < 0.05:
+                start_x = random.randint(0, SCREEN_WIDTH)
+                self.weather_particles.append({
+                    "x": start_x,
+                    "y": -20,
+                    "vx": random.uniform(2, 4),
+                    "vy": random.uniform(3, 6),
+                    "life": random.randint(20, 40),
+                    "max_life": 40,
+                    "color": (255, 220, 100),
+                    "size": random.randint(2, 4),
+                })
+        elif weather == "Void Fog":
+            if random.random() < 0.15:
+                self.weather_particles.append({
+                    "x": random.randint(0, SCREEN_WIDTH),
+                    "y": random.randint(0, SCREEN_HEIGHT // 2),
+                    "vx": random.uniform(0.3, 1.0),
+                    "vy": random.uniform(-0.2, 0.2),
+                    "life": random.randint(60, 120),
+                    "max_life": 120,
+                    "color": (80, 60, 100),
+                    "size": random.randint(8, 20),
+                })
+        for p in self.weather_particles[:]:
+            p["x"] += p["vx"]
+            p["y"] += p["vy"]
+            p["life"] -= 1
+            if p["life"] <= 0 or p["y"] > SCREEN_HEIGHT + 20:
+                self.weather_particles.remove(p)
+
     def set_message(self, msg):
         self.message = msg
         self.message_timer = 120
+
+    def update_weather(self):
+        self.weather_timer -= 1
+        if self.weather_timer <= 0:
+            weights = SEASONAL_MODIFIERS[SEASONS[self.season_index]]["weather_weights"]
+            self.current_weather = random.choices(WEATHER_EVENTS, weights=weights)[0]
+            self.weather_timer = random.randint(WEATHER_DURATION["min"], WEATHER_DURATION["max"])
+            self.weather_particles = []
+
+    def update_season(self):
+        self.day_in_season += 1
+        if self.day_in_season >= SEASON_DAY_LENGTH:
+            self.day_in_season = 0
+            self.season_index = (self.season_index + 1) % len(SEASONS)
+            self.set_message(f"Welcome to {SEASONS[self.season_index]} Season!")
 
     def advance_time(self, amount=0.25):
         self.time_progress += amount
@@ -313,16 +380,22 @@ class GameState:
         self.time_slot = 0
         self.time_progress = 0.0
         self.player.energy = self.player.max_energy
+        self.update_weather()
+        self.update_season()
         self.run_bots()
         for npc in self.npcs:
             npc.talked_today = False
+        season_name = SEASONS[self.season_index]
+        mod = SEASONAL_MODIFIERS[season_name]["growth_mod"]
+        weather_mod = self.current_weather["crop_bonus"]
+        growth_rate = mod + weather_mod
         for row in self.tiles:
             for tile in row:
-                tile.grow()
+                tile.grow(growth_rate)
                 tile.watered = False
                 if tile.soil_state == "watered":
                     tile.soil_state = "tilled"
-        self.set_message(f"Day {self.day} - {TIME_NAMES[0]}")
+        self.set_message(f"Day {self.day} - {TIME_NAMES[0]} ({SEASONS[self.season_index]}, {self.current_weather['name']})")
 
     def save_game(self):
         data = {
@@ -344,6 +417,10 @@ class GameState:
                      for b in self.bots],
             "ship_tier": self.ship_tier,
             "fuel": self.fuel,
+            "season_index": self.season_index,
+            "day_in_season": self.day_in_season,
+            "weather_timer": self.weather_timer,
+            "current_weather_idx": WEATHER_EVENTS.index(self.current_weather) if self.current_weather in WEATHER_EVENTS else 0,
         }
         with open(SAVE_PATH, "w") as f:
             json.dump(data, f)
@@ -386,6 +463,11 @@ class GameState:
             self.bots.append(bot)
         self.ship_tier = data.get("ship_tier", 0)
         self.fuel = data.get("fuel", SHIP_TIERS[self.ship_tier]["fuel_capacity"])
+        self.season_index = data.get("season_index", 0)
+        self.day_in_season = data.get("day_in_season", 0)
+        self.weather_timer = data.get("weather_timer", random.randint(WEATHER_DURATION["min"], WEATHER_DURATION["max"]))
+        weather_idx = data.get("current_weather_idx", 0)
+        self.current_weather = WEATHER_EVENTS[weather_idx] if 0 <= weather_idx < len(WEATHER_EVENTS) else WEATHER_EVENTS[0]
         return True
 
     def reactivate_bot(self, bot):
@@ -603,6 +685,8 @@ class GameState:
         self.set_message(f"Returned from {planet['name']}! Collected {total} items.")
 
     def interact(self):
+        if self.dialogue_active:
+            return
         px = self.player.x // TILE_SIZE
         py = self.player.y // TILE_SIZE
 
@@ -634,13 +718,13 @@ class GameState:
                 self.start_shop()
                 return
             if 13 <= px <= 17 and 4 <= py <= 8:
-                for npc in self.npcs:
-                    if npc.id == "blip":
-                        if self.gift_mode:
+                if self.gift_mode:
+                    for npc in self.npcs:
+                        if npc.id == "blip":
                             if self.give_gift(npc):
                                 return
-                        self.start_dialogue(npc)
-                        return
+                self.start_bar()
+                return
             for npc in self.npcs:
                 if npc.location in ["house1", "house2", "house3", "house4"]:
                     hx, hy = npc.base_tile_x, npc.base_tile_y
@@ -683,6 +767,22 @@ class GameState:
     def start_shop(self):
         self.shop_active = True
         self.subscreen = "shop"
+
+    def start_bar(self):
+        self.bar_active = True
+        self.subscreen = "bar"
+
+    def buy_bar_item(self, idx):
+        if 0 <= idx < len(BAR_ITEMS):
+            item = BAR_ITEMS[idx]
+            if self.player.gold >= item["price"]:
+                self.player.gold -= item["price"]
+                self.player.energy = min(self.player.max_energy, self.player.energy + item["energy"])
+                self.set_message(f"Bought {item['name']}! +{item['energy']} energy.")
+                self.bar_active = False
+                self.subscreen = None
+            else:
+                self.set_message(f"Not enough gold! Need {item['price']}g.")
 
     def select_seed_to_plant(self):
         available = []
@@ -732,7 +832,7 @@ class GameState:
             for hx, hy in [(5, 14), (12, 14), (19, 14), (25, 14)]:
                 rects.append(pygame.Rect(hx * ts, hy * ts, 3 * ts, 3 * ts))
             for npc in self.npcs:
-                rects.append(pygame.Rect(npc.tile_x * ts + 12, npc.tile_y * ts + 12, 8, 8))
+                rects.append(pygame.Rect(npc.tile_x * ts + 3, npc.tile_y * ts - 13, 26, 26))
         return rects
 
     def buy_bot(self, bot_type):

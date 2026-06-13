@@ -367,3 +367,30 @@ PLANET_EXCLUSIVE_SEEDS = {
     "Aquaris":     ["Nebula Seeds"],
     "Verdantia":   ["Zargon Seeds"],
 }
+
+SEASONS = ["Nebula", "Void", "Bloom", "Solar"]
+SEASON_DAY_LENGTH = 14
+
+WEATHER_EVENTS = [
+    {"name": "Clear",       "crop_bonus": 0,   "energy_cost": 0,  "color": None},
+    {"name": "Meteor Shower","crop_bonus": 0.5,"energy_cost": 0,  "color": (255, 200, 100)},
+    {"name": "Solar Flare", "crop_bonus": 0.25,"energy_cost": 15,"color": (255, 100, 50)},
+    {"name": "Alien Rain",  "crop_bonus": 0,   "energy_cost": 0,  "color": (100, 150, 255)},
+    {"name": "Void Fog",    "crop_bonus": -0.5,"energy_cost": 5,  "color": (80, 60, 100)},
+]
+
+SEASONAL_MODIFIERS = {
+    "Nebula": {"weather_weights": [30, 20, 10, 30, 10], "growth_mod": 1.5,  "sky_tint": (200, 180, 255)},
+    "Void":   {"weather_weights": [20, 10, 5,  20, 45], "growth_mod": 0.5,  "sky_tint": (60, 60, 80)},
+    "Bloom":  {"weather_weights": [40, 15, 25, 15, 5],  "growth_mod": 1.25, "sky_tint": (180, 255, 200)},
+    "Solar":  {"weather_weights": [25, 10, 45, 10, 10], "growth_mod": 1.0,  "sky_tint": (255, 230, 150)},
+}
+
+WEATHER_DURATION = {"min": 2, "max": 4}
+
+BAR_ITEMS = [
+    {"name": "Nebula Nectar", "price": 15, "energy": 20, "color": (180, 100, 255)},
+    {"name": "Glow-Ale",      "price": 10, "energy": 10, "color": (100, 220, 100)},
+    {"name": "Cosmic Coffee", "price": 20, "energy": 30, "color": (80, 60, 30)},
+    {"name": "Alien Snacks",  "price": 8,  "energy": 5,  "color": (255, 200, 80)},
+]

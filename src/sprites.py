@@ -239,18 +239,69 @@ def get_building_surf(building_type):
             for xx in range(8, w - 8, 12):
                 set_pixel(s, xx, yy, (200, 180, 160))
     elif building_type == "shop":
-        draw_box(s, 0, 0, w, h, (120, 80, 160), True)
-        draw_box(s, 4, 4, w - 8, h - 8, (140, 100, 180), True)
-        draw_box(s, w // 2 - 12, h - 20, 24, 20, (80, 50, 100), True)
-        draw_box(s, 8, 8, w - 16, 16, (200, 180, 255), True)
+        draw_box(s, 0, 0, w, h, (100, 60, 140), True)
+        draw_box(s, 4, 4, w - 8, h - 8, (130, 90, 170), True)
+        draw_box(s, 8, 4, w - 16, 8, (160, 120, 200), True)
+        draw_box(s, 12, 12, w - 24, 6, (80, 50, 120), True)
+        for i in range(6):
+            for j in range(3):
+                set_pixel(s, 16 + i * 10, 14 + j * 2, (200, 180, 80))
+        draw_box(s, 4, 20, 88, 4, (180, 140, 220), True)
+        draw_box(s, 4, 20, 88, 4, (180, 140, 220), True)
+        for stripe in range(8):
+            ax = 4 + stripe * 11
+            draw_box(s, ax, 20, 6, 4, (200, 150, 255) if stripe % 2 == 0 else (255, 200, 255), True)
+        draw_box(s, 8, 28, 30, 36, (200, 220, 255), True)
+        draw_box(s, 10, 30, 26, 32, (160, 200, 255), True)
+        for gx in range(14, 34, 6):
+            for gy in range(34, 58, 8):
+                set_pixel(s, gx, gy, (100, 200, 100))
+                set_pixel(s, gx, gy + 1, (80, 180, 80))
+        draw_box(s, 58, 28, 30, 36, (200, 220, 255), True)
+        draw_box(s, 60, 30, 26, 32, (160, 200, 255), True)
+        for gx in range(64, 84, 6):
+            for gy in range(34, 58, 8):
+                set_pixel(s, gx, gy, (255, 180, 100))
+                set_pixel(s, gx, gy + 1, (220, 150, 80))
+        draw_box(s, 40, 30, 16, 36, (80, 50, 100), True)
+        draw_box(s, 41, 30, 14, 36, (60, 35, 80), True)
+        for knob_y in range(44, 52, 4):
+            set_pixel(s, 48, knob_y, (200, 170, 100))
     elif building_type == "bar":
-        draw_box(s, 0, 0, w, h, (100, 60, 60), True)
-        draw_box(s, 4, 4, w - 8, h - 8, (130, 80, 80), True)
-        draw_box(s, w // 2 - 8, h - 20, 16, 20, (70, 40, 40), True)
-        set_pixel(s, w // 2, 4, YELLOW)
-        set_pixel(s, w // 2 - 4, 6, YELLOW)
-        set_pixel(s, w // 2 + 4, 6, YELLOW)
-        set_pixel(s, w // 2, 8, YELLOW)
+        draw_box(s, 0, 0, w, h, (80, 40, 40), True)
+        draw_box(s, 4, 4, w - 8, h - 8, (110, 60, 60), True)
+        draw_box(s, 8, 4, w - 16, 8, (150, 80, 80), True)
+        draw_box(s, 12, 12, w - 24, 6, (60, 30, 30), True)
+        for i in range(8):
+            set_pixel(s, 22 + i * 6, 14, (255, 200, 80))
+            set_pixel(s, 22 + i * 6, 15, (255, 220, 150))
+            set_pixel(s, 22 + i * 6, 16, (255, 200, 80))
+        draw_box(s, 4, 20, 88, 2, (60, 30, 30), True)
+        draw_box(s, 10, 24, 30, 38, (60, 50, 30), True)
+        draw_box(s, 12, 26, 26, 34, (80, 70, 50), True)
+        draw_box(s, 14, 38, 22, 2, (120, 100, 60), True)
+        for glass_y in range(28, 38, 3):
+            set_pixel(s, 18, glass_y, (180, 200, 100))
+            set_pixel(s, 30, glass_y, (180, 200, 100))
+            set_pixel(s, 24, glass_y + 1, (200, 220, 120))
+        draw_box(s, 56, 24, 30, 38, (60, 50, 30), True)
+        draw_box(s, 58, 26, 26, 34, (80, 70, 50), True)
+        draw_box(s, 60, 38, 22, 2, (120, 100, 60), True)
+        for glass_y in range(28, 38, 3):
+            set_pixel(s, 64, glass_y, (200, 100, 80))
+            set_pixel(s, 76, glass_y, (200, 100, 80))
+            set_pixel(s, 70, glass_y + 1, (255, 120, 100))
+        draw_box(s, 42, 28, 12, 34, (70, 35, 35), True)
+        draw_box(s, 43, 28, 10, 34, (50, 25, 25), True)
+        for knob_y in range(40, 50, 4):
+            set_pixel(s, 48, knob_y, (180, 150, 80))
+        for star_y in range(60, 76, 8):
+            mx, my = w // 2, star_y
+            set_pixel(s, mx, my, (255, 220, 100))
+            set_pixel(s, mx - 2, my, (255, 220, 100))
+            set_pixel(s, mx + 2, my, (255, 220, 100))
+            set_pixel(s, mx, my - 2, (255, 220, 100))
+            set_pixel(s, mx, my + 2, (255, 220, 100))
     elif building_type == "house":
         draw_box(s, 0, 0, w, h, (140, 160, 180), True)
         draw_box(s, 4, 4, w - 8, h - 8, (160, 180, 200), True)
