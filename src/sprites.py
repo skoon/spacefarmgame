@@ -361,3 +361,20 @@ def get_bot_surf(bot_type):
     s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s
+
+def get_ship_surf(tier):
+    key = f"ship_{tier}"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
+    colors = [(160, 180, 200), (200, 180, 120), (220, 200, 255)]
+    c = colors[min(tier, len(colors) - 1)]
+    s = make_surface(TILE_SIZE, TILE_SIZE)
+    draw_box(s, 4, 12, 24, 8, c, True)
+    draw_box(s, 8, 8, 16, 6, (c[0]//2, c[1]//2, c[2]//2), True)
+    draw_box(s, 10, 4, 12, 6, c, True)
+    draw_box(s, 14, 0, 4, 6, (c[0]//2, c[1]//2, c[2]//2), True)
+    set_pixel(s, 12, 14, GOLD)
+    set_pixel(s, 20, 14, GOLD)
+    s.set_colorkey(BLACK)
+    SPRITE_CACHE[key] = s
+    return s

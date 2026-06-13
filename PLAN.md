@@ -11,136 +11,113 @@ Estimated effort: **Low** (< 50 LoC changed), **Medium** (50–200), **High** (2
 
 **Goal:** Player can build a spaceship, fly to procedurally generated planets, find rare seeds/resources, and return.
 
-### New Data Structures
+### Data Structures (implemented)
 
-**`src/constants.py`** — add:
-```python
-SHIP_TIERS = [
-    {"name": "Scout Pod",  "fuel_capacity": 50, "cargo_slots": 4,  "cost": 0},
-    {"name": "Hauler MK2", "fuel_capacity": 120,"cargo_slots": 10, "cost": 2000},
-    {"name": "Star Cruiser","fuel_capacity": 300,"cargo_slots": 20, "cost": 8000},
-]
-
-PLANET_TEMPLATES = [
-    {"name": "Xylos Prime", "biome": "crystal", "hazard": 0.1, "crop_bonus": "cosmic_wheat", "color": (180,100,255)},
-    {"name": "Magma-7",     "biome": "volcanic","hazard": 0.3, "crop_bonus": "zargon_fruit", "color": (255,80,80)},
-    {"name": "Aquaris",     "biome": "ocean",   "hazard": 0.0, "crop_bonus": "glowroot",     "color": (60,150,255)},
-    {"name": "Verdantia",   "biome": "jungle",  "hazard": 0.2, "crop_bonus": "nebula_bloom", "color": (80,220,100)},
-]
-
-PLANET_EXCLUSIVE_SEEDS = {
-    "Xylos Prime": ["Starlight Melon Seeds"],    # 30% chance to find
-    "Magma-7":     ["Quasar Berry Seeds"],
-}
-```
+**`src/constants.py`:**
+- `SHIP_TIERS`: 3 tiers — Scout Pod (0g, 50 fuel, 4 cargo), Hauler MK2 (2000g, 120 fuel, 10 cargo), Star Cruiser (8000g, 300 fuel, 20 cargo)
+- `PLANETS`: 4 destinations — Xylos Prime (15 fuel), Magma-7 (25), Aquaris (10), Verdantia (20). Each has a `color`, `desc`, and `finds` list of seed items.
+- `PLANET_EXCLUSIVE_SEEDS`: rare seeds per planet (e.g. Starlight Melon Seeds on Xylos Prime)
 
 **`src/game.py`** — new fields on `GameState`:
 ```python
-self.ship_tier = 0            # index into SHIP_TIERS
-self.fuel = 0                 # current fuel
-self.fuel_max = 0             # from SHIP_TIERS[s].fuel_capacity
-self.cargo = []               # list of dicts {item, count}
-self.cargo_max = 0            # from SHIP_TIERS[s].cargo_slots
-self.current_planet = None    # str or None (flying or landed)
-self.planet_seeds = {}        # {crop_key: count} collected on current planet
-self.player.current_map = "farm" | "spaceport" | "planet_<name>"
+self.ship_tier = 0
+self.fuel = 50                     # starts full on Scout Pod
+self.ship_cargo = {}               # {item_name: count} — current expedition loot
+self.hangar_active = False
+self.current_planet = None         # index into PLANETS while exploring
+self.planet_turns_left = 0
+self.planet_explore_active = False
+self.planet_log = []               # recent scan messages
 ```
 
-### Files to change
+### Gameplay flow
 
-| File | Change | Effort |
-|------|--------|--------|
-| `src/constants.py` | Add `SHIP_TIERS`, `PLANET_TEMPLATES`, `PLANET_EXCLUSIVE_SEEDS` | Low |
-| `src/game.py` | Add ship fields + methods: `build_ship()`, `launch_sequence()`, `generate_planet()`, `collect_resource()`, `return_to_port()` | High |
-| `main.py` | Add `draw_planet_screen()` with biome-colored terrain, `draw_hangar_ui()` for ship management | Medium |
-| `main.py` | Key binds: `H` for hangar, `ENTER` to launch/land | Low |
-| `main.py` | Save/load: persist ship fields + cargo in `save_game()`/`load_game()` | Low |
-| `src/sprites.py` | `get_planet_bg(biome)`, `get_ship_surf(tier)` | Medium |
+1. **Spaceport** → press `H` → Hangar overlay
+2. **Hangar** shows: ship name, fuel gauge, cargo slots, upgrade/refuel buttons, planet list
+3. Press `1-4` to launch to a planet (costs fuel)
+4. **Planet screen**: biome-colored gradient background with ground, stars, planet name
+5. Press `SPACE` to scan: 35% find seed, 15% find fuel, 15% find gold, 35% nothing
+6. If cargo is full, finds are blocked — must return to unload
+7. Press `E` to return early; auto-returns after 5-8 turns
+8. Cargo merges into player inventory on return
 
-### Key mechanics
+### Key binds
 
-- **Fuel** consumed per expedition (`fuel -= random.randint(5, 15)`). Refuel at spaceport shop (1g per unit).
-- **Planet exploration** = 5–8 turns on planet screen. Each turn you pick a direction card; may find seeds, fuel pods, or trigger a hazard event (costs energy).
-- **Cargo** slots limit how much you bring back. Excess items are lost on return.
-- **Save compatibility**: existing saves start with 0 fuel and ship_tier=0 — no new-game penalty.
+| Key | Action |
+|-----|--------|
+| `H` (spaceport) | Open hangar |
+| `1-4` (hangar) | Launch to planet |
+| `U` (hangar) | Upgrade ship |
+| `R` (hangar) | Refuel (up to 50 units, 1g each) |
+| `SPACE` (planet) | Scan for resources |
+| `E` (planet) | Return to spaceport |
 
-### Ship upgrade flow
+### Files changed
 
-1. Player saves gold, goes to spaceport, presses `H`
-2. Hangar UI shows current ship + upgrade cost
-3. Pay gold → ship_tier++ → fuel_max and cargo_max increase
-4. New sprite rendered for higher tier
+| File | Change |
+|------|--------|
+| `src/constants.py` | Added `SHIP_TIERS`, `PLANETS`, `PLANET_EXCLUSIVE_SEEDS` |
+| `src/game.py` | Added ship fields, `upgrade_ship()`, `refuel_ship()`, `launch_to_planet()`, `scan_planet()`, `return_from_planet()`, save/load |
+| `main.py` | Added `draw_hangar()`, `draw_planet_explore()`, key handling |
+| `src/sprites.py` | Added `get_ship_surf(tier)` |
 
 ---
 
 ## Milestone 2 — Automated Farm Bots
 
-**Goal:** Player can buy or craft bots that autonomously water/harvest crops, freeing the player for exploration.
+**Goal:** Player can buy bots that autonomously water/harvest crops, freeing the player for exploration.
 
-### New Data Structures
+### Data Structures (implemented)
 
-**`src/constants.py`** — add:
+**`src/constants.py`:**
 ```python
 BOT_TYPES = {
-    "sprout_bot": {
-        "name": "Sprout-Bot",
-        "action": "water",
-        "range": 3,            # tiles radius from bot position
-        "cost": 500,
-        "upkeep": 5,           # gold per day
-        "color": (100, 200, 255),
-    },
-    "harvest_bot": {
-        "name": "Harvest-Bot",
-        "action": "harvest",
-        "range": 2,
-        "cost": 1200,
-        "upkeep": 10,
-        "color": (255, 200, 100),
-    },
+    "water_bot":   {"name": "Water-Bot",   "action": "water",   "range": 2, "cost": 300,  "upkeep": 2,  "color": (80,180,255)},
+    "sprout_bot":  {"name": "Sprout-Bot",  "action": "water",   "range": 3, "cost": 500,  "upkeep": 5,  "color": (100,200,255)},
+    "harvest_bot": {"name": "Harvest-Bot", "action": "harvest", "range": 2, "cost": 1200, "upkeep": 10, "color": (255,200,100)},
 }
 ```
 
-**`src/game.py`** — new class:
+**`src/game.py`** — new `FarmBot` class:
 ```python
 class FarmBot:
-    def __init__(self, bot_type, farm_tile_x, farm_tile_y):
-        self.bot_type = bot_type          # "sprout_bot" | "harvest_bot"
-        self.tile_x = farm_tile_x         # 0..13 (tile array coords)
-        self.tile_y = farm_tile_y
+    def __init__(self, bot_type, array_x, array_y):
+        self.bot_type = bot_type
+        self.array_x = array_x        # 0..13 (tile array coords)
+        self.array_y = array_y        # 0..9
         self.active = True
 ```
 
-New fields on `GameState`:
-```python
-self.bots = []                # list[FarmBot]
-self.total_upkeep = 0         # sum of bot upkeep costs
-```
+### Gameplay flow
 
-### Files to change
+1. **Spaceport** → press `B` → Bot Workshop overlay shows 3 bots with stats
+2. Press `1-3` to buy → gold deducted, enters placement mode
+3. **Farm** → green ghost highlights current tillable tile
+4. Press `E` to place bot on that tile
+5. Each day (`advance_day`): `run_bots()` deducts upkeep, waters/harvests in diamond range
+6. If gold < total upkeep: bots are deactivated (shown dimmed with "(off)" label)
+7. Press `E` on a deactivated bot to pay back-upkeep and reactivate it
 
-| File | Change | Effort |
-|------|--------|--------|
-| `src/constants.py` | Add `BOT_TYPES` dict | Low |
-| `src/game.py` | Add `FarmBot` class, `buy_bot()`, `remove_bot()`, `run_bots()` called in `advance_day()`, deduct upkeep from gold | Medium |
-| `main.py` | Add `draw_bot_shop()` in spaceport (or as shop tab), `draw_bots_on_farm()` in `draw_farm()`, bot placement cursor | Medium |
-| `main.py` | Key: `B` opens bot shop (rebind farm sleep to `F`?), `CLICK` to place | Low |
-| `src/sprites.py` | `get_bot_surf(bot_type)` — small floating robot sprite | Low |
-| `main.py` | Save/load: persist `bots` list | Low |
+### Key binds
 
-### Bot behavior (`run_bots()`)
+| Key | Action |
+|-----|--------|
+| `B` (spaceport) | Open bot workshop |
+| `1-3` (workshop) | Buy bot |
+| `E` (farm, placement) | Place bot |
+| `E` (farm, on inactive bot) | Reactivate bot |
+| `ESC` (any) | Cancel placement |
 
-Called at end of `advance_day()`, before tile growth:
-- **Sprout-Bot**: For each tile within `range` that is `soil_state == "tilled"` and `watered == False`, call `tile.water()`. Max 1 action per day per bot.
-- **Harvest-Bot**: For each mature tile within `range`, collect harvest directly (gold + item to player inventory).
-- If `player.gold < total_upkeep` on day advance, deactivate all bots and show "Bots ran out of power!"
+### Bot behavior
 
-### Placement flow
+- **Water-Bot** (range 2): waters tilled soil within 2-tile diamond
+- **Sprout-Bot** (range 3): waters tilled soil within 3-tile diamond
+- **Harvest-Bot** (range 2): harvests mature crops, adds to inventory + gold
 
-1. Buy bot from spaceport shop → enters placement mode
-2. Farm map shows a ghost cursor
-3. Press E on a tillable tile → bot placed there
-4. Bot rendered as small floating sprite above tile
+### Bug fix (added post-launch)
+
+- Inactive bots were invisible → now rendered dimmed with gray overlay + "(off)" label
+- Reactivation via E key on bot tile pays one day's upkeep
 
 ---
 

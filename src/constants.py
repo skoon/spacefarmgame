@@ -28,6 +28,7 @@ SUIT_WHITE = (220, 225, 230)
 HELMET_LIGHT = (200, 210, 220)
 VISOR_BLUE = (80, 180, 255)
 ENERGY_GREEN = (100, 255, 100)
+GREEN = (80, 220, 80)
 
 TILLABLE_ROWS = 10
 TILLABLE_COLS = 14
@@ -243,4 +244,24 @@ BOT_TYPES = {
         "upkeep": 10,
         "color": (255, 200, 100),
     },
+}
+
+SHIP_TIERS = [
+    {"name": "Scout Pod",     "fuel_capacity": 50,  "cargo_capacity": 4,  "cost": 0},
+    {"name": "Hauler MK2",    "fuel_capacity": 120, "cargo_capacity": 10, "cost": 2000},
+    {"name": "Star Cruiser",  "fuel_capacity": 300, "cargo_capacity": 20, "cost": 8000},
+]
+
+PLANETS = [
+    {"name": "Xylos Prime", "desc": "Crystal caves with glowing gems",  "fuel_cost": 15, "color": (180, 100, 255), "finds": ["Glowroot Seeds", "Nebula Seeds"]},
+    {"name": "Magma-7",     "desc": "Volcanic world of fire and ash",   "fuel_cost": 25, "color": (255, 80, 80),   "finds": ["Zargon Seeds", "Berry Seeds"]},
+    {"name": "Aquaris",     "desc": "Endless ocean under alien suns",   "fuel_cost": 10, "color": (60, 150, 255),  "finds": ["Cosmic Wheat Seeds", "Melon Seeds"]},
+    {"name": "Verdantia",   "desc": "Lush jungle with alien flora",    "fuel_cost": 20, "color": (80, 220, 100),  "finds": ["Nebula Seeds", "Starlight Melon Seeds"]},
+]
+
+PLANET_EXCLUSIVE_SEEDS = {
+    "Xylos Prime": ["Starlight Melon Seeds"],
+    "Magma-7":     ["Quasar Berry Seeds"],
+    "Aquaris":     ["Nebula Seeds"],
+    "Verdantia":   ["Zargon Seeds"],
 }

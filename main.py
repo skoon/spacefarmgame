@@ -165,6 +165,74 @@ def draw_bot_shop():
         draw_text(screen, f"[{i+1}] {bt['cost']}g", px + panel_w - 80, yy + 14, GOLD, font_med)
     draw_text(screen, "1-3: Buy | ESC: Exit", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
 
+def draw_hangar():
+    if not game.hangar_active:
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 650, 480
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (10, 10, 40), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (60, 120, 200), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "Spaceship Hangar", px + panel_w // 2, py + 15, CYAN, font_large, center=True)
+    tier = SHIP_TIERS[game.ship_tier]
+    draw_text(screen, f"Ship: {tier['name']}", px + 20, py + 45, WHITE, font_med)
+    draw_text(screen, f"Fuel: {game.fuel}/{tier['fuel_capacity']}", px + 20, py + 70, GOLD, font_small)
+    draw_text(screen, f"Cargo: {sum(game.ship_cargo.values())}/{tier['cargo_capacity']} slots", px + 20, py + 90, LIGHT_GRAY, font_small)
+    if game.ship_tier + 1 < len(SHIP_TIERS):
+        next_tier = SHIP_TIERS[game.ship_tier + 1]
+        draw_text(screen, f"[U] Upgrade to {next_tier['name']} ({next_tier['cost']}g)", px + 20, py + 115, GOLD, font_small)
+    else:
+        draw_text(screen, "MAX LEVEL", px + 20, py + 115, PINK, font_small)
+    draw_text(screen, f"[R] Refuel (1g per unit, max 50)", px + 20, py + 135, GOLD, font_small)
+    draw_text(screen, "--- Destinations ---", px + panel_w // 2, py + 165, CYAN, font_med, center=True)
+    for i, planet in enumerate(PLANETS):
+        yy = py + 190 + i * 45
+        has_fuel = game.fuel >= planet["fuel_cost"]
+        color = GREEN if has_fuel else RED
+        pygame.draw.rect(screen, (20, 20, 50), (px + 20, yy, panel_w - 40, 38))
+        draw_text(screen, f"[{i+1}] {planet['name']}", px + 35, yy + 4, color, font_med)
+        draw_text(screen, planet["desc"], px + 35, yy + 22, LIGHT_GRAY, font_small)
+        draw_text(screen, f"{planet['fuel_cost']} fuel", px + panel_w - 80, yy + 8, color, font_small)
+    draw_text(screen, "ESC: Close", px + panel_w // 2, py + panel_h - 22, LIGHT_GRAY, font_small, center=True)
+
+def draw_planet_explore():
+    if not game.planet_explore_active or game.current_planet is None:
+        return
+    planet = PLANETS[game.current_planet]
+    c = planet["color"]
+    for y in range(SCREEN_HEIGHT):
+        strip = (c[0] * (SCREEN_HEIGHT - y) // SCREEN_HEIGHT,
+                 c[1] * (SCREEN_HEIGHT - y) // SCREEN_HEIGHT,
+                 c[2] * (SCREEN_HEIGHT - y) // SCREEN_HEIGHT)
+        pygame.draw.line(screen, strip, (0, y), (SCREEN_WIDTH, y))
+    for _ in range(80):
+        sx = random.randint(0, SCREEN_WIDTH)
+        sy = random.randint(0, SCREEN_HEIGHT)
+        screen.set_at((sx, sy), (255, 255, 255, random.randint(50, 200)))
+    ground_y = SCREEN_HEIGHT - 100
+    pygame.draw.rect(screen, (c[0] // 2, c[1] // 2, c[2] // 2), (0, ground_y, SCREEN_WIDTH, 100))
+    for _ in range(20):
+        gx = random.randint(0, SCREEN_WIDTH)
+        h = random.randint(10, 40)
+        gc = (c[0] // 3, c[1] // 3, c[2] // 3)
+        pygame.draw.rect(screen, gc, (gx, ground_y - h, 4, h))
+    overlay = pygame.Surface((SCREEN_WIDTH, 140))
+    overlay.set_alpha(180)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    draw_text(screen, f"Exploring: {planet['name']}", SCREEN_WIDTH // 2, 10, WHITE, font_large, center=True)
+    draw_text(screen, planet["desc"], SCREEN_WIDTH // 2, 36, LIGHT_GRAY, font_med, center=True)
+    tier = SHIP_TIERS[game.ship_tier]
+    draw_text(screen, f"Turns left: {game.planet_turns_left}  |  Cargo: {sum(game.ship_cargo.values())}/{tier['cargo_capacity']}", SCREEN_WIDTH // 2, 62, GOLD, font_small, center=True)
+    draw_text(screen, "[SPACE] Scan  |  [E] Return to ship", SCREEN_WIDTH // 2, 84, WHITE, font_med, center=True)
+    log_y = 110
+    for msg in game.planet_log[-4:]:
+        draw_text(screen, msg, SCREEN_WIDTH // 2, log_y, CYAN, font_small, center=True)
+        log_y += 18
+
 def draw_inventory():
     if not game.inventory_active:
         return
@@ -555,6 +623,25 @@ def handle_events():
                         game.buy_bot(bk)
                 continue
 
+            if game.hangar_active:
+                if event.key == pygame.K_ESCAPE:
+                    game.hangar_active = False
+                elif event.key == pygame.K_u:
+                    game.upgrade_ship()
+                elif event.key == pygame.K_r:
+                    game.refuel_ship()
+                for i in range(len(PLANETS)):
+                    if event.key == getattr(pygame, f"K_{i+1}"):
+                        game.launch_to_planet(i)
+                continue
+
+            if game.planet_explore_active:
+                if event.key == pygame.K_SPACE:
+                    game.scan_planet()
+                elif event.key == pygame.K_e:
+                    game.return_from_planet()
+                continue
+
             if game.inventory_active:
                 if event.key == pygame.K_i:
                     game.inventory_active = False
@@ -627,6 +714,9 @@ def handle_events():
                     game.player.x = game.player.farm_x
                     game.player.y = game.player.farm_y
                     game.set_message("Back on the farm!")
+            elif event.key == pygame.K_h:
+                if game.player.current_map == "spaceport":
+                    game.hangar_active = True
             elif event.key == pygame.K_b:
                 if game.player.current_map == "spaceport":
                     game.bot_shop_active = True
@@ -639,7 +729,7 @@ def handle_events():
                 game.save_game()
 
     keys = pygame.key.get_pressed()
-    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt:
+    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.hangar_active and not game.planet_explore_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt:
         dx, dy = 0, 0
         if keys[pygame.K_w] or keys[pygame.K_UP]:
             dy = -1
@@ -719,8 +809,12 @@ def render():
         draw_dialogue()
     if game.shop_active:
         draw_shop()
+    if game.hangar_active:
+        draw_hangar()
     if game.bot_shop_active:
         draw_bot_shop()
+    if game.planet_explore_active:
+        draw_planet_explore()
     if game.inventory_active:
         draw_inventory()
     if game.seed_select_active:
