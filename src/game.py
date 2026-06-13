@@ -6,8 +6,6 @@ import math
 from src.constants import *
 from src.sprites import *
 
-SAVE_PATH = "savegame.json"
-
 class Tile:
     def __init__(self, x, y):
         self.x = x
@@ -282,6 +280,8 @@ class GameState:
         self.festival_active = False
         self.festival_type = None
         self.festival_data = {}
+        self.save_menu_active = False
+        self.save_menu_slot = 0
 
     def add_particles(self, x, y, color, count=8):
         for _ in range(count):
@@ -408,7 +408,7 @@ class GameState:
                     tile.soil_state = "tilled"
         self.set_message(f"Day {self.day} - {TIME_NAMES[0]} ({SEASONS[self.season_index]}, {self.current_weather['name']})")
 
-    def save_game(self):
+    def save_game(self, slot=0):
         data = {
             "day": self.day,
             "time_slot": self.time_slot,
@@ -433,14 +433,16 @@ class GameState:
             "weather_timer": self.weather_timer,
             "current_weather_idx": WEATHER_EVENTS.index(self.current_weather) if self.current_weather in WEATHER_EVENTS else 0,
         }
-        with open(SAVE_PATH, "w") as f:
+        path = f"savegame_{slot}.json"
+        with open(path, "w") as f:
             json.dump(data, f)
-        self.set_message("Game saved!")
+        self.set_message(f"Game saved to Slot {slot + 1}!")
 
-    def load_game(self):
-        if not os.path.exists(SAVE_PATH):
+    def load_game(self, slot=0):
+        path = f"savegame_{slot}.json"
+        if not os.path.exists(path):
             return False
-        with open(SAVE_PATH, "r") as f:
+        with open(path, "r") as f:
             data = json.load(f)
         self.day = data["day"]
         self.time_slot = data["time_slot"]
@@ -906,6 +908,20 @@ class GameState:
                                 count = random.randint(1, 3)
                                 self.player.add_item(crop_type, count)
                                 self.player.gold += value
+
+    @staticmethod
+    def get_slot_info(slot):
+        path = f"savegame_{slot}.json"
+        if not os.path.exists(path):
+            return None
+        with open(path, "r") as f:
+            data = json.load(f)
+        return {
+            "day": data.get("day", 1),
+            "gold": data.get("gold", 0),
+            "season": SEASONS[data.get("season_index", 0)] if data.get("season_index", 0) < len(SEASONS) else "?",
+            "day_in_season": data.get("day_in_season", 0),
+        }
 
     def get_npc_by_id(self, nid):
         for n in self.npcs:

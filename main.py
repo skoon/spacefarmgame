@@ -14,8 +14,8 @@ font_med = pygame.font.SysFont("monospace", 18)
 font_large = pygame.font.SysFont("monospace", 24)
 
 game = GameState()
-if game.load_game():
-    pass
+if game.load_game(0):
+    game.save_menu_slot = 0
 else:
     game.player.add_item("Glowroot Seeds", 8)
     game.player.add_item("Berry Seeds", 5)
@@ -751,6 +751,39 @@ def draw_help():
         color = GOLD if i == 0 else WHITE
         draw_text(screen, line, SCREEN_WIDTH // 2, y_start + i * 22, color, font_med, center=True)
 
+def draw_save_menu():
+    if not game.save_menu_active:
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 550, 380
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (10, 10, 30), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (80, 100, 160), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "SAVE / LOAD", px + panel_w // 2, py + 15, CYAN, font_large, center=True)
+    for i in range(SAVE_SLOT_COUNT):
+        yy = py + 55 + i * 90
+        info = GameState.get_slot_info(i)
+        is_current = (i == game.save_menu_slot)
+        bg_color = (40, 40, 70) if is_current else (20, 20, 45)
+        border_color = GOLD if is_current else (60, 60, 100)
+        pygame.draw.rect(screen, bg_color, (px + 25, yy, panel_w - 50, 78))
+        pygame.draw.rect(screen, border_color, (px + 25, yy, panel_w - 50, 78), 2)
+        slot_label = f"Slot {i + 1}"
+        if is_current:
+            slot_label += "  < current"
+        slot_color = GOLD if is_current else WHITE
+        draw_text(screen, slot_label, px + 40, yy + 8, slot_color, font_med)
+        if info:
+            draw_text(screen, f"Day {info['day']}  |  {info['season']} (Day {info['day_in_season'] + 1}/{SEASON_DAY_LENGTH})", px + 40, yy + 32, LIGHT_GRAY, font_small)
+            draw_text(screen, f"Gold: {info['gold']}g", px + 40, yy + 50, GOLD, font_small)
+        else:
+            draw_text(screen, "Empty", px + 40, yy + 36, GRAY, font_small)
+        draw_text(screen, f"[{i + 1}]", px + panel_w - 60, yy + 24, GOLD, font_med)
+    draw_text(screen, "1-3: Save to slot  |  L + 1-3: Load from slot  |  ESC: Close", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
+
 def draw_sleep_prompt():
     if not game.sleep_prompt:
         return
@@ -974,6 +1007,26 @@ def handle_events():
                     game.place_bot()
                     continue
 
+            if game.save_menu_active:
+                if event.key == pygame.K_ESCAPE:
+                    game.save_menu_active = False
+                elif event.key in (pygame.K_1, pygame.K_2, pygame.K_3):
+                    slot = event.key - pygame.K_1
+                    game.save_game(slot)
+                    game.save_menu_slot = slot
+                    game.save_menu_active = False
+                elif event.key == pygame.K_l:
+                    keys = pygame.key.get_pressed()
+                    load_slot = None
+                    if keys[pygame.K_1]: load_slot = 0
+                    elif keys[pygame.K_2]: load_slot = 1
+                    elif keys[pygame.K_3]: load_slot = 2
+                    if load_slot is not None and game.load_game(load_slot):
+                        game.save_menu_slot = load_slot
+                        game.set_message(f"Loaded Slot {load_slot + 1}!")
+                        game.save_menu_active = False
+                continue
+
             if event.key == pygame.K_ESCAPE:
                 game.running = False
             elif event.key == pygame.K_e:
@@ -1024,10 +1077,11 @@ def handle_events():
                     if 7 <= px <= 10 and 0 <= py <= 3:
                         game.sleep_prompt = True
             elif event.key == pygame.K_s:
-                game.save_game()
+                if not game.save_menu_active:
+                    game.save_menu_active = True
 
     keys = pygame.key.get_pressed()
-    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.hangar_active and not game.planet_explore_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt and not game.bar_active and not game.festival_active:
+    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.hangar_active and not game.planet_explore_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt and not game.bar_active and not game.festival_active and not game.save_menu_active:
         dx, dy = 0, 0
         if keys[pygame.K_w] or keys[pygame.K_UP]:
             dy = -1
@@ -1128,6 +1182,8 @@ def render():
         draw_seed_select()
     if game.sleep_prompt:
         draw_sleep_prompt()
+    if game.save_menu_active:
+        draw_save_menu()
     if game.festival_active:
         draw_festival()
     if game.help_active:
@@ -1149,7 +1205,7 @@ def main():
         pygame.display.flip()
         clock.tick(FPS)
 
-    game.save_game()
+    game.save_game(game.save_menu_slot)
     pygame.quit()
     sys.exit()
 
