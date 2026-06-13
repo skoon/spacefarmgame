@@ -731,6 +731,8 @@ class GameState:
             rects.append(pygame.Rect(15 * ts, 2 * ts, 3 * ts, 3 * ts))
             for hx, hy in [(5, 14), (12, 14), (19, 14), (25, 14)]:
                 rects.append(pygame.Rect(hx * ts, hy * ts, 3 * ts, 3 * ts))
+            for npc in self.npcs:
+                rects.append(pygame.Rect(npc.tile_x * ts + 12, npc.tile_y * ts + 12, 8, 8))
         return rects
 
     def buy_bot(self, bot_type):
