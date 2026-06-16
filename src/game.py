@@ -175,8 +175,8 @@ class NPC:
 
         self.tile_x = self.base_tile_x
         self.tile_y = self.base_tile_y
-        self.pixel_offset_x = 0
-        self.pixel_offset_y = 0
+        self.pixel_offset_x = 0.0
+        self.pixel_offset_y = 0.0
         self.move_target = None
         self.last_schedule_time = -1
 
@@ -198,8 +198,30 @@ class NPC:
             best_entry = self.schedule[0]
         if best_entry:
             next_x, next_y = best_entry[1], best_entry[2]
-            if (next_x, next_y) != (self.tile_x, self.tile_y):
-                self.tile_x, self.tile_y = next_x, next_y
+            if (next_x, next_y) != (self.tile_x, self.tile_y) and self.move_target is None:
+                self.move_target = (next_x, next_y)
+
+    def update_movement(self):
+        if self.move_target is None:
+            return
+        tx, ty = self.move_target
+        current_x = self.tile_x * TILE_SIZE + self.pixel_offset_x
+        current_y = self.tile_y * TILE_SIZE + self.pixel_offset_y
+        target_x = tx * TILE_SIZE
+        target_y = ty * TILE_SIZE
+        dx = target_x - current_x
+        dy = target_y - current_y
+        dist = math.hypot(dx, dy)
+        speed = 2.0
+        if dist <= speed:
+            self.tile_x = tx
+            self.tile_y = ty
+            self.pixel_offset_x = 0.0
+            self.pixel_offset_y = 0.0
+            self.move_target = None
+        else:
+            self.pixel_offset_x += (dx / dist) * speed
+            self.pixel_offset_y += (dy / dist) * speed
 
     def get_dialogue(self):
         if self.heart_level >= 4:
@@ -848,7 +870,7 @@ class GameState:
             for hx, hy in [(5, 14), (12, 14), (19, 14), (25, 14)]:
                 rects.append(pygame.Rect(hx * ts, hy * ts, 3 * ts, 3 * ts))
             for npc in self.npcs:
-                rects.append(pygame.Rect(npc.tile_x * ts + 3, npc.tile_y * ts - 13, 26, 26))
+                rects.append(pygame.Rect(npc.tile_x * ts + 3 + int(npc.pixel_offset_x), npc.tile_y * ts - 13 + int(npc.pixel_offset_y), 26, 26))
         return rects
 
     def buy_bot(self, bot_type):

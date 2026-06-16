@@ -692,8 +692,8 @@ def draw_spaceport():
     # NPC Sprites
     for npc in game.npcs:
         ns = get_npc_surf(npc.id, npc.color, npc.color2)
-        nx = npc.tile_x * TILE_SIZE
-        ny = npc.tile_y * TILE_SIZE - TILE_SIZE
+        nx = npc.tile_x * TILE_SIZE + int(npc.pixel_offset_x)
+        ny = npc.tile_y * TILE_SIZE + int(npc.pixel_offset_y) - TILE_SIZE
         screen.blit(ns, (nx, ny))
         draw_text(screen, npc.name, nx + TILE_SIZE // 2, ny - 8, WHITE, font_small, center=True)
 
@@ -1195,6 +1195,8 @@ def main():
 
     while game.running:
         handle_events()
+        for npc in game.npcs:
+            npc.update_movement()
         game.update_particles()
         game.update_weather_particles()
 

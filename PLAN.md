@@ -2,7 +2,7 @@
 
 ## Overview
 
-Five major features, ordered by dependency. Each milestone builds on the prior.
+Six major features, ordered by dependency. Each milestone builds on the prior.
 Estimated effort: **Low** (< 50 LoC changed), **Medium** (50–200), **High** (200–500).
 
 ---
@@ -465,6 +465,64 @@ Festival screens use the same overlay pattern as shop/inventory:
 
 ---
 
+---
+
+## Milestone 6 — Save / Load Screen with Three Slots
+
+**Goal:** Player can manage multiple save files through a dedicated UI overlay.
+
+### Data Structures
+
+**`src/constants.py`** — add:
+```python
+SAVE_SLOT_COUNT = 3
+```
+
+**`src/game.py`** — new fields on `GameState`:
+```python
+self.save_menu_active = False
+self.save_menu_slot = 0       # currently selected slot index (0-2)
+```
+
+### Slot System
+
+- Save files: `savegame_0.json`, `savegame_1.json`, `savegame_2.json`
+- `save_game(slot)` writes to `savegame_{slot}.json`
+- `load_game(slot)` reads from `savegame_{slot}.json`
+- `get_slot_info(slot)` statically reads preview data (day, gold, season) without loading full game state
+- `save_menu_slot` is persisted as the "active" slot; auto-loaded on startup and saved on quit
+
+### Save/Load Screen
+
+**`main.py`** — new function `draw_save_menu()`:
+- Dark overlay with centered panel
+- 3 slot cards, each showing: slot number, Day, Season, Gold (or "Empty")
+- Current slot highlighted with gold border
+- Press **1/2/3** to save to that slot
+- Press **L + 1/2/3** (hold L, tap digit) to load from that slot
+- Press **ESC** to close
+
+### Key Binds
+
+| Key | Action |
+|-----|--------|
+| `S` (anywhere) | Open save/load screen |
+| `1/2/3` (save menu) | Save to slot |
+| `L + 1/2/3` (save menu) | Load from slot |
+| `ESC` (save menu) | Close save menu |
+
+### Files changed
+
+| File | Change | Effort |
+|------|--------|--------|
+| `src/constants.py` | `SAVE_SLOT_COUNT` constant | Low |
+| `src/game.py` | `save_menu_active`, `save_menu_slot` fields; `save_game(slot)`, `load_game(slot)`, `get_slot_info()` | Medium |
+| `main.py` | `draw_save_menu()`, S key redirect, save menu event handling, quit uses `save_menu_slot` | High |
+
+### Migration
+
+`savegame.json` is replaced by `savegame_0.json`. On first launch with M6, the player will see "Empty" for all three slots (no migration from old single-slot save).
+
 ## Dependency Graph
 
 ```
@@ -475,9 +533,11 @@ Milestone 3 (NPC Schedules)
   └─► Milestone 4 (Weather & Seasons) — requires day tracking
   │
 Milestone 5 (Festivals) — requires NPC Schedules + Seasons
+  │
+Milestone 6 (Save Slots) — requires existing save/load infrastructure
 ```
 
-All milestones can be built in parallel after Milestone 1 and 3 are complete, since they touch largely independent systems.
+Milestones 1-3 and 5-6 are largely independent of each other aside from dependency arrows above.
 
 ## Save Format
 
@@ -492,6 +552,7 @@ Each milestone adds new keys to `savegame.json`. Backward compatibility: `data.g
 | M3 | None (NPC hearts/talked already saved) |
 | M4 | `season_index`, `day_in_season`, `current_weather`, `weather_timer`, tile `crop_timer` changes to float |
 | M5 | None (ephemeral event state) |
+| M6 | Slot-based save files (`savegame_{0,1,2}.json`), `save_menu_slot` |
 
 ### Migration path
 
@@ -511,13 +572,15 @@ This is a non-breaking change since JSON doesn't distinguish int/float when load
 
 ## Summary of Key Binds
 
-| Key | M1 | M2 | M3 | M4 | M5 |
-|-----|----|----|----|----|----|
-| `H` | Open hangar | — | — | — | — |
-| `B` | — | Open bot shop | — | — | — |
-| `G` | — | — | Toggle gift mode | — | — |
-| `ENTER` | Launch/land | — | — | — | Submit festival |
-| `1/2/3` | — | — | — | — | Choose crop in tasting |
-| Arrow keys | — | — | — | — | Dance mini-game |
+| Key | M1 | M2 | M3 | M4 | M5 | M6 |
+|-----|----|----|----|----|----|----|
+| `H` | Open hangar | — | — | — | — | — |
+| `B` | — | Open bot shop | — | — | — | — |
+| `G` | — | — | Toggle gift mode | — | — | — |
+| `ENTER` | Launch/land | — | — | — | Submit festival | — |
+| `1/2/3` | — | — | — | — | Choose crop in tasting | Save to slot |
+| `S` | — | — | — | — | — | Open save/load screen |
+| `L + 1/2/3` | — | — | — | — | — | Load from slot |
+| Arrow keys | — | — | — | — | Dance mini-game | — |
 
-Existing keys (`M`, `I`, `S`, `SPACE`, `E`, `?`) remain unchanged.
+Existing keys (`M`, `I`, `SPACE`, `E`, `?`) remain unchanged.
