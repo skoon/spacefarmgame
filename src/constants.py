@@ -417,6 +417,99 @@ FESTIVALS = {
     },
 }
 
+SKILLS = [
+    {"id": "farming",     "name": "Farming",     "color": (100, 220, 100), "desc": "Tend the land and grow crops"},
+    {"id": "exploration", "name": "Exploration", "color": (100, 180, 255), "desc": "Explore the cosmos for rare finds"},
+    {"id": "cooking",     "name": "Cooking",     "color": (255, 200, 100), "desc": "Cook delicious cosmic dishes"},
+    {"id": "social",      "name": "Social",      "color": (255, 150, 200), "desc": "Connect with the people of the port"},
+]
+
+SKILL_PERKS = {
+    "farming": {
+        5:  {"name": "Green Thumb",     "desc": "Crops grow 25% faster"},
+        10: {"name": "Master Farmer",   "desc": "20% chance of double harvest"},
+        15: {"name": "Soil Whisperer",  "desc": "Tilled soil stays watered an extra day"},
+        20: {"name": "Cosmic Harvest",  "desc": "Harvested crops sell for 50% more"},
+    },
+    "exploration": {
+        5:  {"name": "Fuel Saver",      "desc": "Planet travel costs 20% less fuel"},
+        10: {"name": "Scout",           "desc": "+1 cargo slot during expeditions"},
+        15: {"name": "Treasure Hunter", "desc": "Rare finds are 2x more likely"},
+        20: {"name": "Star Navigator",  "desc": "+2 planet turns per expedition"},
+    },
+    "cooking": {
+        5:  {"name": "Home Cook",       "desc": "Dishes give +25% energy"},
+        10: {"name": "Master Chef",     "desc": "Dishes sell for 25% more"},
+        15: {"name": "Efficient Kitchen","desc": "Recipes use 1 less ingredient (min 1)"},
+        20: {"name": "Cosmic Chef",     "desc": "Can cook 3 batches at once"},
+    },
+    "social": {
+        5:  {"name": "Friendly",        "desc": "+1 extra heart per gift"},
+        10: {"name": "Beloved",         "desc": "Daily heart gain is doubled"},
+        15: {"name": "Charmer",         "desc": "Gifts always gain at least 1 heart"},
+        20: {"name": "Soulmate",        "desc": "Married NPC gives you gifts"},
+    },
+}
+
+RECIPES = {
+    "glowroot_salad": {
+        "name": "Glowroot Salad",
+        "ingredients": {"glowroot": 2},
+        "energy": 50,
+        "sell_price": 80,
+        "desc": "A crunchy, glowing salad",
+    },
+    "zargon_jam": {
+        "name": "Zargon Jam",
+        "ingredients": {"zargon_fruit": 3},
+        "energy": 80,
+        "sell_price": 300,
+        "desc": "Sweet and tangy purple jam",
+    },
+    "cosmic_bread": {
+        "name": "Cosmic Bread",
+        "ingredients": {"cosmic_wheat": 3},
+        "energy": 70,
+        "sell_price": 200,
+        "desc": "Golden bread that sparkles",
+    },
+    "starlight_juice": {
+        "name": "Starlight Juice",
+        "ingredients": {"starlight_melon": 1},
+        "energy": 100,
+        "sell_price": 200,
+        "desc": "Refreshing, luminous juice",
+    },
+    "nebula_tea": {
+        "name": "Nebula Tea",
+        "ingredients": {"nebula_bloom": 2},
+        "energy": 90,
+        "sell_price": 300,
+        "desc": "Aromatic tea from cosmic flowers",
+    },
+    "berry_smoothie": {
+        "name": "Quasar Smoothie",
+        "ingredients": {"quasar_berry": 3},
+        "energy": 60,
+        "sell_price": 180,
+        "desc": "Energizing berry blend",
+    },
+    "farm_feast": {
+        "name": "Farm Feast",
+        "ingredients": {"glowroot": 1, "zargon_fruit": 1, "cosmic_wheat": 1},
+        "energy": 150,
+        "sell_price": 250,
+        "desc": "A hearty meal for a hard day's work",
+    },
+    "galaxy_delight": {
+        "name": "Galaxy Delight",
+        "ingredients": {"starlight_melon": 1, "nebula_bloom": 1, "quasar_berry": 2},
+        "energy": 200,
+        "sell_price": 500,
+        "desc": "The ultimate cosmic dish",
+    },
+}
+
 BAR_ITEMS = [
     {"name": "Nebula Nectar", "price": 15, "energy": 20, "color": (180, 100, 255)},
     {"name": "Glow-Ale",      "price": 10, "energy": 10, "color": (100, 220, 100)},

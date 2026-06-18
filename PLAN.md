@@ -225,23 +225,13 @@ Triggered in `start_dialogue()` when heart_level crosses a threshold.
 
 NPC movement is purely visual — collision rects still exist at NPC positions. When an NPC moves, their collision rect follows. The player cannot walk through them at any time.
 
-```python
-# In update_movement():
-if self.move_target:
-    target_px = self.move_target[0] * TILE_SIZE
-    target_py = self.move_target[1] * TILE_SIZE
-    dx = target_px - self.tile_x * TILE_SIZE
-    dy = target_py - self.tile_y * TILE_SIZE
-    speed = 1  # pixel per frame
-    if abs(dx) <= speed and abs(dy) <= speed:
-        self.tile_x, self.tile_y = self.move_target
-        self.move_target = None
-    else:
-        # move toward target
-        pass  # update pixel offsets for smooth animation
-```
+NPCs walk at **2px/frame** (~3.7 tiles/sec diagonal) via `NPC.update_movement()`, called from the main render loop.
+
+`update_schedule()` sets `move_target` instead of teleporting; `update_movement()` interpolates `pixel_offset_x/y` as floats each frame until the target is reached, then snaps `tile_x/y`.
 
 ---
+
+
 
 ## Milestone 4 — Cosmic Weather & Seasons
 
@@ -570,17 +560,172 @@ This is a non-breaking change since JSON doesn't distinguish int/float when load
 |------|---------|
 | (no new files) | All changes are in existing files |
 
+---
+
+## Milestone 7 — Cooking & Recipes
+
+**Goal:** Player can cook harvested crops into dishes for energy restoration and profit.
+
+### Data Structures
+
+**`src/constants.py`** — add `RECIPES` dict:
+```python
+RECIPES = {
+    "glowroot_salad": {
+        "name": "Glowroot Salad",
+        "ingredients": {"glowroot": 2},
+        "energy": 50,
+        "sell_price": 80,
+        "desc": "A crunchy, glowing salad",
+    },
+    # ... 8 recipes total combining different crops
+}
+```
+
+**`src/game.py`** — new field:
+```python
+self.cooking_active = False
+```
+
+### Gameplay flow
+
+1. **Farm** → press `C` → Kitchen overlay shows available recipes (those with all ingredients)
+2. Each recipe shows: name, ingredients, energy restore, sell price
+3. Press number key to cook → ingredients consumed, dish added to inventory, energy restored
+4. **Shop** → dishes appear in a "Dishes" sell section below crops using `Z/X/C/V/B/N/M/P` keys
+5. Dishes sell for more than the sum of their ingredients, creating a profit incentive
+
+### Key binds
+
+| Key | Action |
+|-----|--------|
+| `C` (farm) | Open kitchen / cooking menu |
+| `1-8` (kitchen) | Cook recipe |
+| `Z/X/C/V/B/N/M/P` (shop) | Sell dish |
+
+### Files changed
+
+| File | Change | Effort |
+|------|--------|--------|
+| `src/constants.py` | `RECIPES` dict with 8 recipes | Low |
+| `src/game.py` | `cooking_active` field, `cook_recipe()`, `sell_dish()` methods | Medium |
+| `main.py` | `draw_cooking()` UI, C key handler, cooking events, dish sell in shop | Medium |
+
+---
+
+## Milestone 8 — UI Polish
+
+**Goal:** Quality-of-life visual improvements to make the game feel more polished and informative.
+
+### Improvements
+
+#### 1. Facing Tile Highlight
+A subtle white highlight (50% alpha) appears on the tile the player is facing. This shows exactly which tile will be affected by a tool or interaction.
+
+- Added to both **farm** and **spaceport** views
+- Uses `Player.get_facing_tile()` to determine position
+- Drawn right before the player sprite so it appears under the player's feet
+
+#### 2. Quantity Modifier (Shift)
+Hold **Shift** while pressing a buy/sell/cook key to perform the action 10× at once.
+
+- **Shop (buy seeds):** `Shift + 1-6` buys 10×
+- **Shop (sell crops):** `Shift + Q-Y` sells 10×  
+- **Shop (sell dishes):** `Shift + Z-P` sells 10×
+- **Bar:** `Shift + 1-4` buys 10× (capped by gold)
+- **Kitchen:** `Shift + 1-8` cooks 10× (checks ingredient quantity)
+
+Backend: `buy_item()`, `sell_item()`, `sell_dish()`, `buy_bar_item()`, `cook_recipe()` all accept a `count` parameter.
+
+#### 3. Crop Info HUD
+When on the farm and near a crop, a centered info line appears at the bottom of the screen showing:
+- Crop name
+- Growth stage (e.g. "Stage 2/4")
+- Growth percentage
+- Water status (watered / needs water)
+
+Shown only when no overlays (shop, inventory, etc.) are open.
+
+#### 4. NPC Location Markers
+Colored dots drawn on the ground at each NPC's tile position on the spaceport:
+- Filled circle matching the NPC's `color`
+- White outline for visibility
+- Updates with NPC movement (respects `pixel_offset_x/y`)
+
+Makes NPCs easy to spot from across the map.
+
+### Files Changed
+
+| File | Change | Effort |
+|------|--------|--------|
+| `src/game.py` | `buy_item()`, `sell_item()`, `sell_dish()`, `buy_bar_item()`, `cook_recipe()` added `count` param | Medium |
+| `main.py` | Facing tile highlight in `draw_farm()` + `draw_spaceport()`, crop info in `draw_hud()`, NPC markers in `draw_spaceport()`, Shift quantity in shop/bar/cooking events | Medium |
+
+---
+
+## Milestone 9 — Skill Progression
+
+**Goal:** Player gains XP in 4 skills (Farming, Exploration, Cooking, Social) by performing actions. Leveling unlocks perks that improve gameplay.
+
+### Data Structures
+
+**`src/constants.py`** — `SKILLS` list (4 skills with name, color, desc) and `SKILL_PERKS` dict (perk name + description at levels 5, 10, 15, 20 for each skill).
+
+### XP Sources
+
+| Skill | Action | XP |
+|-------|--------|----|
+| Farming | Till soil / water | 2 |
+| Farming | Plant seed | 3 |
+| Farming | Harvest crop | 5 |
+| Exploration | Launch to planet | 2 |
+| Exploration | Scan planet | 3 |
+| Exploration | Return from planet | 5 |
+| Cooking | Cook a dish | 3 per dish |
+| Social | Talk to NPC (first daily) | 1 |
+| Social | Give a gift | 3 |
+| Social | Get married | 20 |
+
+### Perks
+
+| Skill | Lv | Perk | Effect |
+|-------|----|------|--------|
+| Farming | 5 | Green Thumb | Crops grow 25% faster |
+| Farming | 10 | Master Farmer | 20% chance of double harvest |
+| Exploration | 5 | Fuel Saver | Planet travel costs 20% less fuel |
+| Exploration | 10 | Scout | +1 cargo slot during expeditions |
+| Exploration | 20 | Star Navigator | +2 planet turns per expedition |
+| Cooking | 5 | Home Cook | Dishes give +25% energy |
+| Cooking | 10 | Master Chef | Dishes sell for 25% more |
+| Social | 5 | Friendly | +1 extra heart per gift |
+
+### UI
+
+Press **K** to open a skills overlay showing:
+- Each skill: name, level, XP bar with current/total XP
+- Checkmark badges for unlocked perks (★Lv5, ★Lv10, etc.)
+
+### Files Changed
+
+| File | Change | Effort |
+|------|--------|--------|
+| `src/constants.py` | `SKILLS` array, `SKILL_PERKS` dict | Low |
+| `src/game.py` | `skills` / `skills_active` fields, `add_skill_xp()`, `get_skill_level()`, XP gain calls in 10 methods, perk effects in 7 methods, save/load | High |
+| `main.py` | `draw_skills()` UI, K key handler, movement blocker | Medium |
+
 ## Summary of Key Binds
 
-| Key | M1 | M2 | M3 | M4 | M5 | M6 |
-|-----|----|----|----|----|----|----|
-| `H` | Open hangar | — | — | — | — | — |
-| `B` | — | Open bot shop | — | — | — | — |
-| `G` | — | — | Toggle gift mode | — | — | — |
-| `ENTER` | Launch/land | — | — | — | Submit festival | — |
-| `1/2/3` | — | — | — | — | Choose crop in tasting | Save to slot |
-| `S` | — | — | — | — | — | Open save/load screen |
-| `L + 1/2/3` | — | — | — | — | — | Load from slot |
-| Arrow keys | — | — | — | — | Dance mini-game | — |
+| Key | M1 | M2 | M3 | M4 | M5 | M6 | M7 | M9 |
+|-----|----|----|----|----|----|----|----|----|
+| `H` | Open hangar | — | — | — | — | — | — | — |
+| `B` | — | Open bot shop | — | — | — | — | — | — |
+| `G` | — | — | Toggle gift mode | — | — | — | — | — |
+| `C` | — | — | — | — | — | — | Open kitchen | — |
+| `K` | — | — | — | — | — | — | — | Toggle skills |
+| `ENTER` | Launch/land | — | — | — | Submit festival | — | — | — |
+| `1/2/3` | — | — | — | — | Choose crop in tasting | Save to slot | Cook recipe | — |
+| `S` | — | — | — | — | — | Open save/load screen | — | — |
+| `L + 1/2/3` | — | — | — | — | — | Load from slot | — | — |
+| Arrow keys | — | — | — | — | Dance mini-game | — | — | — |
 
 Existing keys (`M`, `I`, `SPACE`, `E`, `?`) remain unchanged.

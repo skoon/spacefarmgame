@@ -304,6 +304,9 @@ class GameState:
         self.festival_data = {}
         self.save_menu_active = False
         self.save_menu_slot = 0
+        self.cooking_active = False
+        self.skills = {"farming": 0, "exploration": 0, "cooking": 0, "social": 0}
+        self.skills_active = False
 
     def add_particles(self, x, y, color, count=8):
         for _ in range(count):
@@ -376,6 +379,42 @@ class GameState:
         self.message = msg
         self.message_timer = 120
 
+    def add_skill_xp(self, skill, amount):
+        old_level = self.get_skill_level(skill)
+        self.skills[skill] = self.skills.get(skill, 0) + amount
+        new_level = self.get_skill_level(skill)
+        if new_level > old_level and new_level in SKILL_PERKS.get(skill, {}):
+            perk = SKILL_PERKS[skill][new_level]
+            self.set_message(f"★ {perk['name']} unlocked! {perk['desc']}")
+
+    def get_skill_level(self, skill):
+        xp = self.skills.get(skill, 0)
+        level = 0
+        cum = 0
+        while True:
+            needed = (level + 1) * 10
+            if cum + needed > xp:
+                break
+            cum += needed
+            level += 1
+        return min(level, 20)
+
+    def get_skill_xp_for_next(self, skill):
+        level = self.get_skill_level(skill)
+        return (level + 1) * 10
+
+    def get_skill_progress(self, skill):
+        level = self.get_skill_level(skill)
+        xp = self.skills.get(skill, 0)
+        total = 0
+        for i in range(level):
+            total += (i + 1) * 10
+        return xp - total
+
+    def get_skill_xp_needed(self, skill):
+        level = self.get_skill_level(skill)
+        return (level + 1) * 10
+
     def update_weather(self):
         self.weather_timer -= 1
         if self.weather_timer <= 0:
@@ -422,6 +461,8 @@ class GameState:
         mod = SEASONAL_MODIFIERS[season_name]["growth_mod"]
         weather_mod = self.current_weather["crop_bonus"]
         growth_rate = mod + weather_mod
+        if self.get_skill_level("farming") >= 5:
+            growth_rate *= 1.25
         for row in self.tiles:
             for tile in row:
                 tile.grow(growth_rate)
@@ -454,6 +495,7 @@ class GameState:
             "day_in_season": self.day_in_season,
             "weather_timer": self.weather_timer,
             "current_weather_idx": WEATHER_EVENTS.index(self.current_weather) if self.current_weather in WEATHER_EVENTS else 0,
+            "skills": self.skills,
         }
         path = f"savegame_{slot}.json"
         with open(path, "w") as f:
@@ -503,6 +545,7 @@ class GameState:
         self.weather_timer = data.get("weather_timer", random.randint(WEATHER_DURATION["min"], WEATHER_DURATION["max"]))
         weather_idx = data.get("current_weather_idx", 0)
         self.current_weather = WEATHER_EVENTS[weather_idx] if 0 <= weather_idx < len(WEATHER_EVENTS) else WEATHER_EVENTS[0]
+        self.skills = data.get("skills", {"farming": 0, "exploration": 0, "cooking": 0, "social": 0})
         return True
 
     def reactivate_bot(self, bot):
@@ -534,6 +577,8 @@ class GameState:
             gain = 1
         else:
             gain = 0
+        if self.get_skill_level("social") >= 5:
+            gain += 1
         if gain > 0:
             old = npc.heart_level
             npc.heart_level = min(10, npc.heart_level + gain)
@@ -544,6 +589,7 @@ class GameState:
         self.dialogue_npc = npc
         self.dialogue_index = 0
         self.gift_mode = False
+        self.add_skill_xp("social", 3)
         return True
 
     def get_tile_at(self, tx, ty):
@@ -571,6 +617,7 @@ class GameState:
                                        ty * TILE_SIZE + TILE_SIZE // 2,
                                        SOIL_BROWN)
                     self.set_message("Tilled the soil.")
+                    self.add_skill_xp("farming", 2)
                     self.advance_time()
                 else:
                     self.player.energy += 3
@@ -585,6 +632,7 @@ class GameState:
                                        ty * TILE_SIZE + TILE_SIZE // 2,
                                        WATER_BLUE, 12)
                     self.set_message("Watered the soil.")
+                    self.add_skill_xp("farming", 2)
                     self.advance_time()
                 else:
                     self.player.energy += 2
@@ -596,6 +644,8 @@ class GameState:
                 value, crop_type = tile.harvest()
                 if crop_type:
                     count = random.randint(1, 3)
+                    if self.get_skill_level("farming") >= 10 and random.random() < 0.2:
+                        count *= 2
                     self.player.add_item(crop_type, count)
                     self.player.gold += value
                     self.player.energy -= 2
@@ -603,6 +653,7 @@ class GameState:
                                        ty * TILE_SIZE + TILE_SIZE // 2,
                                        CROP_TYPES[crop_type]["color"], 15)
                     self.set_message(f"Harvested {count}x {CROP_TYPES[crop_type]['name']}! (+{value}g)")
+                    self.add_skill_xp("farming", 5)
                     self.advance_time()
             else:
                 self.set_message("Nothing to harvest here.")
@@ -622,6 +673,7 @@ class GameState:
                                    ty * TILE_SIZE + TILE_SIZE // 2,
                                    (100, 200, 100), 8)
                 self.set_message(f"Planted {CROP_TYPES[crop_key]['name']}!")
+                self.add_skill_xp("farming", 3)
                 self.advance_time()
             else:
                 self.set_message("Can't plant here. Need watered soil.")
@@ -664,17 +716,24 @@ class GameState:
 
     def launch_to_planet(self, planet_idx):
         planet = PLANETS[planet_idx]
-        if self.fuel < planet["fuel_cost"]:
-            self.set_message(f"Need {planet['fuel_cost']} fuel to reach {planet['name']}!")
+        fuel_cost = planet["fuel_cost"]
+        if self.get_skill_level("exploration") >= 5:
+            fuel_cost = max(1, int(fuel_cost * 0.8))
+        if self.fuel < fuel_cost:
+            self.set_message(f"Need {fuel_cost} fuel to reach {planet['name']}!")
             return
-        self.fuel -= planet["fuel_cost"]
+        self.fuel -= fuel_cost
         self.current_planet = planet_idx
-        self.planet_turns_left = random.randint(5, 8)
+        turns = random.randint(5, 8)
+        if self.get_skill_level("exploration") >= 20:
+            turns += 2
+        self.planet_turns_left = turns
         self.planet_explore_active = True
         self.hangar_active = False
         self.ship_cargo = {}
         self.planet_log = []
         self.set_message(f"Landed on {planet['name']}! Scan (SPACE) or Return (E).")
+        self.add_skill_xp("exploration", 2)
 
     def scan_planet(self):
         if not self.planet_explore_active or self.current_planet is None:
@@ -682,10 +741,13 @@ class GameState:
         self.planet_turns_left -= 1
         planet = PLANETS[self.current_planet]
         tier = SHIP_TIERS[self.ship_tier]
+        cargo_cap = tier["cargo_capacity"]
+        if self.get_skill_level("exploration") >= 10:
+            cargo_cap += 1
         cargo_total = sum(self.ship_cargo.values())
         roll = random.random()
         if roll < 0.35:
-            if cargo_total < tier["cargo_capacity"]:
+            if cargo_total < cargo_cap:
                 finds = planet["finds"]
                 exclusive = PLANET_EXCLUSIVE_SEEDS.get(planet["name"], [])
                 all_finds = finds + exclusive
@@ -704,6 +766,7 @@ class GameState:
             self.planet_log.append(f"Found {gold_find}g!")
         else:
             self.planet_log.append("Nothing interesting here.")
+        self.add_skill_xp("exploration", 3)
         if self.planet_turns_left <= 0:
             self.return_from_planet()
 
@@ -718,6 +781,7 @@ class GameState:
         self.current_planet = None
         self.planet_explore_active = False
         self.set_message(f"Returned from {planet['name']}! Collected {total} items.")
+        self.add_skill_xp("exploration", 5)
 
     def interact(self):
         if self.dialogue_active:
@@ -784,6 +848,7 @@ class GameState:
             lines = [f"{npc.name}: {npc.get_dialogue()}"]
             if npc.heart_level > old_level:
                 lines.append(f"♥ Relationship with {npc.name} grew! ({npc.heart_level}/10)")
+            self.add_skill_xp("social", 1)
 
             if npc.romanceable and npc.heart_level >= 10 and self.married_to is None:
                 lines.append(f"★ {npc.name} looks at you with love in their eyes...")
@@ -810,17 +875,18 @@ class GameState:
         self.bar_active = True
         self.subscreen = "bar"
 
-    def buy_bar_item(self, idx):
+    def buy_bar_item(self, idx, count=1):
         if 0 <= idx < len(BAR_ITEMS):
             item = BAR_ITEMS[idx]
-            if self.player.gold >= item["price"]:
-                self.player.gold -= item["price"]
-                self.player.energy = min(self.player.max_energy, self.player.energy + item["energy"])
-                self.set_message(f"Bought {item['name']}! +{item['energy']} energy.")
+            total = item["price"] * count
+            if self.player.gold >= total:
+                self.player.gold -= total
+                self.player.energy = min(self.player.max_energy, self.player.energy + item["energy"] * count)
+                self.set_message(f"Bought {count}x {item['name']}! +{item['energy'] * count} energy.")
                 self.bar_active = False
                 self.subscreen = None
             else:
-                self.set_message(f"Not enough gold! Need {item['price']}g.")
+                self.set_message(f"Not enough gold! Need {total}g.")
 
     def select_seed_to_plant(self):
         available = []
@@ -834,25 +900,58 @@ class GameState:
         self.seed_select_active = True
         self.selected_seed_index = 0
 
-    def buy_item(self, crop_key):
+    def buy_item(self, crop_key, count=1):
         data = CROP_TYPES[crop_key]
-        cost = data["seed_price"]
+        cost = data["seed_price"] * count
         if self.player.gold >= cost:
             self.player.gold -= cost
             seed_name = data["seed_name"]
-            self.player.add_item(seed_name)
-            self.set_message(f"Bought {seed_name} for {cost}g!")
+            self.player.add_item(seed_name, count)
+            self.set_message(f"Bought {count}x {seed_name} for {cost}g!")
         else:
             self.set_message("Not enough gold!")
 
-    def sell_item(self, crop_key):
-        if self.player.has_item(crop_key):
-            price = CROP_TYPES[crop_key]["sell_price"]
-            self.player.remove_item(crop_key)
+    def sell_item(self, crop_key, count=1):
+        if self.player.has_item(crop_key, count):
+            price = CROP_TYPES[crop_key]["sell_price"] * count
+            self.player.remove_item(crop_key, count)
             self.player.gold += price
-            self.set_message(f"Sold {CROP_TYPES[crop_key]['name']} for {price}g!")
+            self.set_message(f"Sold {count}x {CROP_TYPES[crop_key]['name']} for {price}g!")
         else:
             self.set_message("You don't have any to sell!")
+
+    def sell_dish(self, dish_name, count=1):
+        if self.player.has_item(dish_name, count):
+            recipe = next((r for r in RECIPES.values() if r["name"] == dish_name), None)
+            if recipe:
+                price = recipe["sell_price"] * count
+                if self.get_skill_level("cooking") >= 10:
+                    price = int(price * 1.25)
+                self.player.remove_item(dish_name, count)
+                self.player.gold += price
+                self.set_message(f"Sold {count}x {dish_name} for {price}g!")
+        else:
+            self.set_message("You don't have any to sell!")
+
+    def cook_recipe(self, recipe_key, count=1):
+        recipe = RECIPES.get(recipe_key)
+        if not recipe:
+            return
+        for ing, need in recipe["ingredients"].items():
+            if self.player.inventory.get(ing, 0) < need * count:
+                self.set_message(f"Missing ingredients for {count}x {recipe['name']}!")
+                return
+        for ing, need in recipe["ingredients"].items():
+            self.player.remove_item(ing, need * count)
+        dish_name = recipe["name"]
+        self.player.add_item(dish_name, count)
+        energy_gain = recipe["energy"] * count
+        if self.get_skill_level("cooking") >= 5:
+            energy_gain = int(energy_gain * 1.25)
+        self.player.energy = min(self.player.max_energy, self.player.energy + energy_gain)
+        self.cooking_active = False
+        self.set_message(f"Cooked {count}x {dish_name}! +{energy_gain} energy!")
+        self.add_skill_xp("cooking", 3 * count)
 
     def get_solid_rects(self):
         rects = []
@@ -963,6 +1062,7 @@ class GameState:
             self.dialogue_npc = None
             self.add_particles(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, PINK, 40)
             self.add_particles(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, GOLD, 30)
+            self.add_skill_xp("social", 20)
 
     def start_festival(self):
         if not self.festival_today:

@@ -71,6 +71,19 @@ def draw_hud():
     if game.gift_mode:
         draw_text(screen, "GIFT MODE", 750, 60, PINK, font_small)
 
+    if game.player.current_map == "farm" and not any([game.dialogue_active, game.shop_active, game.bot_shop_active, game.hangar_active, game.inventory_active, game.seed_select_active, game.sleep_prompt, game.bar_active, game.festival_active, game.save_menu_active, game.cooking_active]):
+        ftx, fty = game.player.get_facing_tile()
+        tile = game.get_tile_at(ftx, fty)
+        if tile and tile.crop:
+            data = CROP_TYPES.get(tile.crop_type)
+            if data:
+                stages = data["growth_stages"]
+                pct = int(tile.crop_timer / max(tile.crop_growth_time, 1) * 100)
+                stage_str = f"Stage {tile.crop_stage + 1}/{stages}"
+                water_str = " 💧" if tile.watered else " 💦 needs water"
+                info = f"{data['name']} — {stage_str} ({pct}%){water_str}"
+                draw_text(screen, info, SCREEN_WIDTH // 2, SCREEN_HEIGHT - 48, WHITE, font_small, center=True)
+
 def draw_message():
     if game.message_timer > 0:
         alpha = min(255, game.message_timer * 4)
@@ -130,7 +143,7 @@ def draw_shop():
 
     col_w = panel_w // 2
     draw_text(screen, "-- Buy Seeds --", px + col_w // 2, py + 75, CYAN, font_med, center=True)
-    draw_text(screen, "-- Sell Crops --", px + col_w + col_w // 2, py + 75, ORANGE, font_med, center=True)
+    draw_text(screen, "-- Sell --", px + col_w + col_w // 2, py + 75, ORANGE, font_med, center=True)
 
     for i, crop_key in enumerate(CROP_ORDER):
         data = CROP_TYPES[crop_key]
@@ -148,6 +161,21 @@ def draw_shop():
         screen.blit(icon, (px + col_w + 20, yy + 2))
         draw_text(screen, f"{data['name']} x{count} - {sell_price}g", px + col_w + 40, yy + 4, WHITE, font_small)
         draw_text(screen, f"[{sell_keys[i]}]", px + panel_w - 50, yy + 4, ORANGE, font_small)
+
+    dish_y = py + 100 + len(CROP_ORDER) * 28 + 10
+    draw_text(screen, "-- Dishes --", px + col_w + col_w // 2, dish_y, PINK, font_med, center=True)
+    dish_keys = ["Z", "X", "C", "V", "B", "N", "M", "P"]
+    di = 0
+    for rk, recipe in RECIPES.items():
+        name = recipe["name"]
+        count = game.player.inventory.get(name, 0)
+        if count <= 0:
+            continue
+        yy = dish_y + 20 + di * 22
+        draw_text(screen, f"{name} x{count} - {recipe['sell_price']}g", px + col_w + 40, yy, WHITE, font_small)
+        if di < len(dish_keys):
+            draw_text(screen, f"[{dish_keys[di]}]", px + panel_w - 50, yy, ORANGE, font_small)
+        di += 1
 
     draw_text(screen, "ESC: Exit Shop", px + panel_w // 2, py + panel_h - 30, LIGHT_GRAY, font_med, center=True)
 
@@ -293,28 +321,51 @@ def draw_seed_select():
     if not game.seed_select_active:
         return
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-    overlay.set_alpha(200)
+    overlay.set_alpha(180)
     overlay.fill((0, 0, 20))
     screen.blit(overlay, (0, 0))
-    panel_w, panel_h = 400, 300
+    panel_w, panel_h = 440, 420
     px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
     pygame.draw.rect(screen, (10, 20, 30), (px, py, panel_w, panel_h))
     pygame.draw.rect(screen, (60, 140, 60), (px, py, panel_w, panel_h), 3)
-    draw_text(screen, "Select Seeds to Plant", px + panel_w // 2, py + 15, WHITE, font_large, center=True)
+    draw_text(screen, "Select Seeds to Plant", px + panel_w // 2, py + 14, WHITE, font_large, center=True)
+    draw_text(screen, f"Gold: {game.player.gold}g  |  Energy: {game.player.energy}/{game.player.max_energy}",
+              px + panel_w // 2, py + 36, GOLD, font_small, center=True)
+
     idx = 0
+    entry_h = 48
     for crop_key in CROP_ORDER:
-        seed_name = CROP_TYPES[crop_key]["seed_name"]
+        data = CROP_TYPES[crop_key]
+        seed_name = data["seed_name"]
         if seed_name in game.player.inventory:
-            yy = py + 55 + idx * 35
-            hilight = (40, 80, 40) if idx == game.selected_seed_index else (20, 30, 40)
-            pygame.draw.rect(screen, hilight, (px + 20, yy - 2, panel_w - 40, 30))
+            yy = py + 56 + idx * entry_h
+            selected = idx == game.selected_seed_index
+            bg = (40, 80, 40) if selected else (18, 26, 36)
+            border = (80, 200, 80) if selected else (40, 50, 60)
+            pygame.draw.rect(screen, bg, (px + 20, yy, panel_w - 40, entry_h - 4))
+            pygame.draw.rect(screen, border, (px + 20, yy, panel_w - 40, entry_h - 4), 1)
+
             icon = get_crop_icon(crop_key)
-            screen.blit(icon, (px + 30, yy + 2))
+            screen.blit(icon, (px + 28, yy + 6))
+
             count = game.player.inventory[seed_name]
-            draw_text(screen, f"{CROP_TYPES[crop_key]['name']} x{count}", px + 55, yy + 6, WHITE, font_small)
-            draw_text(screen, f"({CROP_TYPES[crop_key]['desc']})", px + 55, yy + 18, LIGHT_GRAY, font_small, center=True)
+            draw_text(screen, f"{data['name']}  x{count}", px + 56, yy + 4, WHITE, font_small)
+            draw_text(screen, data['desc'], px + 56, yy + 18, LIGHT_GRAY, font_small)
+
+            growth = f"{data['growth_time']} days"
+            if data.get("regrows"):
+                growth += " (regrows)"
+            sell_str = f"Sell: {data['sell_price']}g"
+            growth_str = f"Growth: {growth}"
+            draw_text(screen, f"{growth_str}  |  {sell_str}", px + 56, yy + 32, CYAN, font_small)
+
             idx += 1
-    draw_text(screen, "E: Select | Q: Cancel", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
+
+    if idx == 0:
+        draw_text(screen, "No seeds in inventory!", px + panel_w // 2, py + panel_h // 2, LIGHT_GRAY, font_med, center=True)
+    else:
+        draw_text(screen, "Arrow keys: Navigate  |  E: Plant  |  Q: Cancel",
+                  px + panel_w // 2, py + panel_h - 22, LIGHT_GRAY, font_small, center=True)
 
 def draw_relationship_bar():
     if game.player.current_map != "spaceport":
@@ -567,6 +618,14 @@ def draw_farm():
             label += " (off)"
         draw_text(screen, label, bx + TILE_SIZE // 2, by - 8, label_color, font_small, center=True)
 
+    # Facing tile highlight
+    ftx, fty = game.player.get_facing_tile()
+    if 0 <= ftx < FARM_TILES_X and 0 <= fty < FARM_TILES_Y:
+        hl = pygame.Surface((TILE_SIZE, TILE_SIZE))
+        hl.set_alpha(50)
+        hl.fill((255, 255, 255))
+        screen.blit(hl, (ftx * TILE_SIZE, fty * TILE_SIZE))
+
     # Placement ghost
     if game.placement_mode and game.player.current_map == "farm":
         px = game.player.x // TILE_SIZE
@@ -689,6 +748,13 @@ def draw_spaceport():
         draw_box(door_surf, 2, 0, 4, 12, (80, 60, 40), True)
         screen.blit(door_surf, (door_x, door_y))
 
+    # NPC location markers (visible from afar)
+    for npc in game.npcs:
+        mx = npc.tile_x * TILE_SIZE + int(npc.pixel_offset_x) + TILE_SIZE // 2
+        my = npc.tile_y * TILE_SIZE + int(npc.pixel_offset_y)
+        pygame.draw.circle(screen, npc.color, (mx, my), 5)
+        pygame.draw.circle(screen, WHITE, (mx, my), 5, 1)
+
     # NPC Sprites
     for npc in game.npcs:
         ns = get_npc_surf(npc.id, npc.color, npc.color2)
@@ -711,6 +777,14 @@ def draw_spaceport():
     screen.blit(get_tile_surf("path"), (ex, ey))
     draw_text(screen, "-> FARM", ex + TILE_SIZE // 2, ey + TILE_SIZE // 2 - 8, CYAN, font_small, center=True)
 
+    # Facing tile highlight
+    ftx, fty = game.player.get_facing_tile()
+    if 0 <= ftx < SPACEPORT_TILES_X and 0 <= fty < SPACEPORT_TILES_Y:
+        hl = pygame.Surface((TILE_SIZE, TILE_SIZE))
+        hl.set_alpha(50)
+        hl.fill((255, 255, 255))
+        screen.blit(hl, (ftx * TILE_SIZE, fty * TILE_SIZE))
+
     # Player
     player_surf = get_astronaut_surf(game.player.direction)
     screen.blit(player_surf, (game.player.x, game.player.y))
@@ -719,37 +793,72 @@ def draw_help():
     if not game.help_active:
         return
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-    overlay.set_alpha(200)
+    overlay.set_alpha(180)
     overlay.fill((0, 0, 20))
     screen.blit(overlay, (0, 0))
-    lines = [
-        "=== HELP ===",
-        "",
-        "WASD / Arrows    Move",
-        "SPACE            Use selected tool / Scan planet",
-        "E                Interact / Place bot / Return from planet",
-        "1-3              Select tool (Hoe/Water/Scythe)",
-        "4                Plant seeds",
-        "H (spaceport)    Spaceship hangar",
-        "B (spaceport)    Bot workshop",
-        "E near bar       Open bar menu",
-        "G (spaceport)    Gift mode (E to give to NPC)",
-        "U / R (hangar)   Upgrade ship / Refuel",
-        "I                Toggle inventory",
-        "M                Toggle map (farm/spaceport)",
-        "S                Save game",
-        "?                Toggle this help",
-        "ESC              Quit game",
-        "",
-        "E near landing pad Enter festival (on festival days)",
-        "",
-        "Note: Weather & seasons affect crop growth.",
-        "Nebula (fast) > Bloom > Solar > Void (slow)",
+    panel_w, panel_h = 580, 400
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (10, 10, 30), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (80, 100, 160), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "HELP", px + panel_w // 2, py + 14, GOLD, font_large, center=True)
+
+    left_sections = [
+        ("MOVEMENT", [("WASD / Arrows", "Move")]),
+        ("ACTIONS", [
+            ("SPACE", "Use tool / Scan planet"),
+            ("E", "Interact / Place bot / Return"),
+        ]),
+        ("TOOLS", [
+            ("1", "Hoe"),
+            ("2", "Watering Can"),
+            ("3", "Scythe"),
+            ("4", "Plant Seeds"),
+        ]),
     ]
-    y_start = SCREEN_HEIGHT // 2 - len(lines) * 12
-    for i, line in enumerate(lines):
-        color = GOLD if i == 0 else WHITE
-        draw_text(screen, line, SCREEN_WIDTH // 2, y_start + i * 22, color, font_med, center=True)
+    right_sections = [
+        ("MENUS", [
+            ("I", "Inventory"),
+            ("K", "Skills & Progression"),
+            ("M", "Map"),
+            ("S", "Save Game"),
+            ("?", "Toggle Help"),
+        ]),
+        ("LOCATIONS", [
+            ("H (spaceport)", "Spaceship Hangar"),
+            ("B (spaceport)", "Bot Workshop"),
+            ("C (farm)", "Kitchen / Cook"),
+            ("E near bar", "Bar menu"),
+            ("G (spaceport)", "Gift mode"),
+            ("U / R (hangar)", "Upgrade / Refuel"),
+        ]),
+    ]
+
+    col_l = px + 25
+    col_r = px + 310
+    key_w = 175
+    lh = 16
+
+    def draw_section(col_x, sections, y_start):
+        y = y_start
+        for sname, items in sections:
+            draw_text(screen, f"-- {sname} --", col_x, y, CYAN, font_small)
+            y += 17
+            for key, desc in items:
+                draw_text(screen, key, col_x + 10, y, GOLD, font_small)
+                draw_text(screen, desc, col_x + 10 + key_w, y, WHITE, font_small)
+                y += lh
+            y += 3
+        return y
+
+    sy = py + 42
+    draw_section(col_l, left_sections, sy)
+    draw_section(col_r, right_sections, sy)
+
+    tips_y = py + panel_h - 52
+    draw_text(screen, "-- TIPS --", col_l, tips_y, CYAN, font_small)
+    draw_text(screen, "E near landing pad: Enter festival (festival days)", col_l + 10, tips_y + 18, LIGHT_GRAY, font_small)
+    draw_text(screen, "ESC: Quit  |  Weather & seasons affect crop growth", col_l + 10, tips_y + 34, LIGHT_GRAY, font_small)
+    draw_text(screen, "Growth speed: Nebula > Bloom > Solar > Void", col_l + 10, tips_y + 50, LIGHT_GRAY, font_small)
 
 def draw_save_menu():
     if not game.save_menu_active:
@@ -783,6 +892,79 @@ def draw_save_menu():
             draw_text(screen, "Empty", px + 40, yy + 36, GRAY, font_small)
         draw_text(screen, f"[{i + 1}]", px + panel_w - 60, yy + 24, GOLD, font_med)
     draw_text(screen, "1-3: Save to slot  |  L + 1-3: Load from slot  |  ESC: Close", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
+
+def draw_skills():
+    if not game.skills_active:
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 420, 340
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (10, 20, 30), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (100, 140, 200), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "Skills & Progression", px + panel_w // 2, py + 15, WHITE, font_large, center=True)
+    for i, sk in enumerate(SKILLS):
+        skid = sk["id"]
+        level = game.get_skill_level(skid)
+        xp = game.skills.get(skid, 0)
+        xp_progress = game.get_skill_progress(skid)
+        xp_needed = game.get_skill_xp_needed(skid)
+        yy = py + 50 + i * 65
+        pygame.draw.rect(screen, (20, 30, 45), (px + 20, yy, panel_w - 40, 55))
+        pygame.draw.rect(screen, (60, 80, 120), (px + 20, yy, panel_w - 40, 55), 1)
+        draw_text(screen, f"{sk['name']}  Lv.{level}", px + 35, yy + 4, sk["color"], font_med)
+        draw_text(screen, sk["desc"], px + 35, yy + 24, LIGHT_GRAY, font_small)
+        # XP bar
+        bar_x, bar_y = px + panel_w - 120, yy + 8
+        bar_w, bar_h = 90, 12
+        pygame.draw.rect(screen, (30, 30, 40), (bar_x, bar_y, bar_w, bar_h))
+        if xp_needed > 0:
+            fill = int(bar_w * xp_progress / max(xp_needed, 1))
+            pygame.draw.rect(screen, sk["color"], (bar_x, bar_y, fill, bar_h))
+        draw_text(screen, f"{xp} XP", bar_x + bar_w // 2, bar_y - 2, WHITE, font_small, center=True)
+        # Perk checkmarks
+        perk_line = []
+        for plv in [5, 10, 15, 20]:
+            if plv <= level:
+                perk_line.append(f"★Lv{plv}")
+        if perk_line:
+            draw_text(screen, " ".join(perk_line), px + 35, yy + 40, GOLD, font_small)
+    draw_text(screen, "Press K to close", px + panel_w // 2, py + panel_h - 22, LIGHT_GRAY, font_small, center=True)
+
+def draw_cooking():
+    if not game.cooking_active:
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 550, 440
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (20, 30, 20), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (80, 180, 80), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "~ Kitchen ~", px + panel_w // 2, py + 15, ENERGY_GREEN, font_large, center=True)
+    draw_text(screen, f"Energy: {game.player.energy}/{game.player.max_energy}", px + panel_w // 2, py + 42, GOLD, font_med, center=True)
+    recipe_keys = list(RECIPES.keys())
+    idx = 0
+    for i, rk in enumerate(recipe_keys):
+        recipe = RECIPES[rk]
+        can_cook = all(game.player.inventory.get(ing, 0) >= need for ing, need in recipe["ingredients"].items())
+        yy = py + 75 + idx * 70
+        if not can_cook:
+            continue
+        pygame.draw.rect(screen, (30, 50, 30), (px + 20, yy, panel_w - 40, 60))
+        pygame.draw.rect(screen, (60, 120, 60), (px + 20, yy, panel_w - 40, 60), 1)
+        draw_text(screen, recipe["name"], px + 40, yy + 6, WHITE, font_med)
+        ings = ", ".join(f"{v}x {k}" for k, v in recipe["ingredients"].items())
+        draw_text(screen, ings, px + 40, yy + 26, LIGHT_GRAY, font_small)
+        draw_text(screen, f"+{recipe['energy']}E  Sell: {recipe['sell_price']}g", px + 40, yy + 44, GOLD, font_small)
+        draw_text(screen, f"[{idx+1}]", px + panel_w - 60, yy + 12, GOLD, font_med)
+        idx += 1
+    if idx == 0:
+        draw_text(screen, "No recipes available — harvest some crops first!", px + panel_w // 2, py + 150, LIGHT_GRAY, font_med, center=True)
+    draw_text(screen, "1-8: Cook  |  ESC: Exit", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
 
 def draw_sleep_prompt():
     if not game.sleep_prompt:
@@ -921,21 +1103,31 @@ def handle_events():
                 if event.key == pygame.K_ESCAPE:
                     game.shop_active = False
                     game.subscreen = None
+                qty = 10 if pygame.key.get_mods() & pygame.KMOD_SHIFT else 1
                 sell_keys = [pygame.K_q, pygame.K_w, pygame.K_e, pygame.K_r, pygame.K_t, pygame.K_y]
                 for i, crop_key in enumerate(CROP_ORDER):
                     if event.key == getattr(pygame, f"K_{i+1}"):
-                        game.buy_item(crop_key)
+                        game.buy_item(crop_key, qty)
                     if i < len(sell_keys) and event.key == sell_keys[i]:
-                        game.sell_item(crop_key)
+                        game.sell_item(crop_key, qty)
+                dish_keys = [pygame.K_z, pygame.K_x, pygame.K_c, pygame.K_v, pygame.K_b, pygame.K_n, pygame.K_m, pygame.K_p]
+                di = 0
+                for rk, recipe in RECIPES.items():
+                    if game.player.inventory.get(recipe["name"], 0) <= 0:
+                        continue
+                    if di < len(dish_keys) and event.key == dish_keys[di]:
+                        game.sell_dish(recipe["name"], qty)
+                    di += 1
                 continue
 
             if game.bar_active:
                 if event.key == pygame.K_ESCAPE:
                     game.bar_active = False
                     game.subscreen = None
+                qty = 10 if pygame.key.get_mods() & pygame.KMOD_SHIFT else 1
                 for i in range(len(BAR_ITEMS)):
                     if event.key == getattr(pygame, f"K_{i+1}"):
-                        game.buy_bar_item(i)
+                        game.buy_bar_item(i, qty)
                 continue
 
             if game.bot_shop_active:
@@ -1027,6 +1219,18 @@ def handle_events():
                         game.save_menu_active = False
                 continue
 
+            if game.cooking_active:
+                if event.key == pygame.K_ESCAPE:
+                    game.cooking_active = False
+                else:
+                    qty = 10 if pygame.key.get_mods() & pygame.KMOD_SHIFT else 1
+                    available = [rk for rk in RECIPES if all(game.player.inventory.get(ing, 0) >= need * qty for ing, need in RECIPES[rk]["ingredients"].items())]
+                    for i in range(len(available)):
+                        if event.key == getattr(pygame, f"K_{i+1}"):
+                            game.cook_recipe(available[i], qty)
+                            game.cooking_active = False
+                continue
+
             if event.key == pygame.K_ESCAPE:
                 game.running = False
             elif event.key == pygame.K_e:
@@ -1068,6 +1272,11 @@ def handle_events():
             elif event.key == pygame.K_h:
                 if game.player.current_map == "spaceport":
                     game.hangar_active = True
+            elif event.key == pygame.K_c:
+                if game.player.current_map == "farm":
+                    game.cooking_active = True
+            elif event.key == pygame.K_k:
+                game.skills_active = not game.skills_active
             elif event.key == pygame.K_b:
                 if game.player.current_map == "spaceport":
                     game.bot_shop_active = True
@@ -1081,7 +1290,7 @@ def handle_events():
                     game.save_menu_active = True
 
     keys = pygame.key.get_pressed()
-    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.hangar_active and not game.planet_explore_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt and not game.bar_active and not game.festival_active and not game.save_menu_active:
+    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.hangar_active and not game.planet_explore_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt and not game.bar_active and not game.festival_active and not game.save_menu_active and not game.skills_active:
         dx, dy = 0, 0
         if keys[pygame.K_w] or keys[pygame.K_UP]:
             dy = -1
@@ -1184,8 +1393,12 @@ def render():
         draw_sleep_prompt()
     if game.save_menu_active:
         draw_save_menu()
+    if game.skills_active:
+        draw_skills()
     if game.festival_active:
         draw_festival()
+    if game.cooking_active:
+        draw_cooking()
     if game.help_active:
         draw_help()
 
