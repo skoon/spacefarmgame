@@ -558,7 +558,7 @@ This is a non-breaking change since JSON doesn't distinguish int/float when load
 
 | File | Purpose |
 |------|---------|
-| (no new files) | All changes are in existing files |
+| `assets/fonts/space-mono.ttf` | Custom pixel font for all in-game text (M15) |
 
 ---
 
@@ -729,3 +729,1062 @@ Press **K** to open a skills overlay showing:
 | Arrow keys | — | — | — | — | Dance mini-game | — | — | — |
 
 Existing keys (`M`, `I`, `SPACE`, `E`, `?`) remain unchanged.
+
+---
+
+## Milestone 10 — Farm Expansion & Buildings
+
+**Goal:** Player can expand the tillable farm area and construct permanent buildings that provide utility (storage, auto-water, greenhouse, shipping).
+
+### Land Expansion
+
+The initial 10×14 tillable grid is too small for late-game. A signpost at the farm's southeast edge opens an expansion menu.
+
+**Data — `src/constants.py`:**
+```python
+FARM_EXPANSIONS = [
+    {"tier": 0, "cost": 0,     "cols": 14, "rows": 10, "off_x": 2, "off_y": 5},
+    {"tier": 1, "cost": 1000,  "cols": 16, "rows": 12, "off_x": 1, "off_y": 4},
+    {"tier": 2, "cost": 3000,  "cols": 18, "rows": 14, "off_x": 1, "off_y": 3},
+    {"tier": 3, "cost": 6000,  "cols": 20, "rows": 16, "off_x": 0, "off_y": 2},
+    {"tier": 4, "cost": 10000, "cols": 22, "rows": 18, "off_x": 0, "off_y": 1},
+    {"tier": 5, "cost": 15000, "cols": 24, "rows": 20, "off_x": 0, "off_y": 0},
+]
+```
+
+### Buildings
+
+**Data — `src/constants.py`:**
+```python
+BUILDING_TYPES = {
+    "storage_shed": {
+        "name": "Storage Shed",
+        "cost": 2000,
+        "size": (3, 2),
+        "desc": "+24 extra inventory slots",
+        "color": (120, 80, 40),
+    },
+    "well": {
+        "name": "Well",
+        "cost": 1500,
+        "size": (1, 1),
+        "desc": "Auto-waters 4 adjacent tiles each day",
+        "color": (60, 100, 180),
+    },
+    "greenhouse": {
+        "name": "Greenhouse",
+        "cost": 5000,
+        "size": (4, 3),
+        "desc": "Crops inside ignore season/weather penalties",
+        "color": (150, 220, 150),
+    },
+    "shipping_bin": {
+        "name": "Shipping Bin",
+        "cost": 500,
+        "size": (1, 1),
+        "desc": "Drop items to sell overnight",
+        "color": (180, 100, 60),
+    },
+}
+```
+
+### New GameState Fields
+
+```python
+self.farm_expansion_tier = 0
+self.farm_cols = 14
+self.farm_rows = 10
+self.farm_off_x = 2
+self.farm_off_y = 5
+self.buildings = []                    # [{type, tile_x, tile_y}]
+self.build_mode = None                 # building type string when placing
+self.shipping_bin_contents = {}        # {item_name: count}
+self.expand_menu_active = False
+```
+
+### New Methods
+
+**`buy_expansion()`** — pay gold, increment tier, expand tiles array:
+```python
+def buy_expansion(self):
+    next_tier = FARM_EXPANSIONS[self.farm_expansion_tier + 1]
+    if self.player.gold < next_tier["cost"]:
+        self.set_message(f"Need {next_tier['cost']}g to expand!")
+        return
+    self.player.gold -= next_tier["cost"]
+    self.farm_expansion_tier += 1
+    tier = FARM_EXPANSIONS[self.farm_expansion_tier]
+    self.farm_cols = tier["cols"]
+    self.farm_rows = tier["rows"]
+    self.farm_off_x = tier["off_x"]
+    self.farm_off_y = tier["off_y"]
+    # Expand tiles array with new Tile objects for new cells
+    old_rows, old_cols = len(self.tiles), len(self.tiles[0])
+    for r in range(self.farm_rows):
+        if r < old_rows:
+            for c in range(old_cols, self.farm_cols):
+                self.tiles[r].append(Tile(c, r))
+        else:
+            self.tiles.append([Tile(c, r) for c in range(self.farm_cols)])
+    self.set_message(f"Farm expanded! ({self.farm_cols}x{self.farm_rows})")
+```
+
+**`buy_building(building_id)`** — pay cost, enter placement mode:
+```python
+def buy_building(self, building_id):
+    bt = BUILDING_TYPES[building_id]
+    if self.player.gold < bt["cost"]:
+        self.set_message(f"Need {bt['cost']}g to build {bt['name']}!")
+        return
+    self.player.gold -= bt["cost"]
+    self.build_mode = building_id
+    self.set_message(f"Placed {bt['name']}! (Building system TBD)")
+```
+
+**`process_shipping_bin()`** — called in `advance_day()`:
+- All items in `shipping_bin_contents` are sold at their base sell price
+- Gold is added, bin is cleared, message shows total earned
+
+**`apply_buildings()`** — called in `advance_day()`:
+- Each **Well** auto-waters the 4 adjacent tiles (up/down/left/right) before growth
+- **Greenhouse** tiles use growth_mod = 1.0 regardless of season/weather (checked in grow())
+
+### Changes to Existing Systems
+
+| System | Change |
+|--------|--------|
+| `main.py` `draw_farm()` | Use `game.farm_rows/cols/off_x/off_y` instead of `TILLABLE_ROWS/COLS` + `FARM_TILES_OFFSET_X/Y` |
+| `main.py` `draw_farm()` | Render building sprites on the farm |
+| `main.py` | New `draw_expand_menu()` panel with tier info/cost |
+| `main.py` | Building place ghost (green outline on valid tiles) |
+| `main.py` | Shipping bin interaction: pressing E on bin opens transfer UI |
+| `main.py` | Building shop at spaceport (new panel or added to existing shop) |
+| `main.py` `draw_hud()` | Show expanded inventory capacity if shed is built |
+| `main.py` | Key: `V` to open building shop at spaceport; E on signpost to expand |
+| `src/game.py` `get_tile_at()` | Use runtime `farm_off_x/y` instead of `FARM_TILES_OFFSET` |
+| `src/game.py` `place_bot()` | Use runtime `farm_cols/rows` instead of `TILLABLE_COLS/ROWS` |
+| `src/game.py` `run_bots()` | Use runtime dimensions |
+| `src/sprites.py` | `get_building_surf(building_id)` — pixel-art for 4 buildings |
+| Save/load | Persist `farm_expansion_tier`, `farm_cols/rows/off_x/off_y`, `buildings`, `shipping_bin_contents` |
+| Save/load | Load expanded tiles (existing loop handles variable size via `data["tiles"]` length) |
+
+### Effect on Crop Growth (Greenhouse)
+
+When a tile is inside the greenhouse footprint, `grow()` ignores season and weather modifiers:
+```python
+def grow(self, growth_rate=1.0, in_greenhouse=False):
+    if self.crop and self.watered:
+        if not in_greenhouse:
+            self.crop_timer += growth_rate  # applies season/weather mods
+        else:
+            self.crop_timer += 1.0  # neutral growth
+```
+
+### Files Changed
+
+| File | Change | Effort |
+|------|--------|--------|
+| `src/constants.py` | `FARM_EXPANSIONS`, `BUILDING_TYPES` | Low |
+| `src/game.py` | Dynamic farm dimensions, `buy_expansion()`, `buy_building()`, `process_shipping_bin()`, `apply_buildings()`, building placement methods | High |
+| `main.py` | Runtime dimensions in all render/event code, building sprites, expand menu UI, building shop UI, shipping bin UI | High |
+| `src/sprites.py` | `get_building_surf()` for 4 building types | Low |
+
+---
+
+## Milestone 11 — Animal Husbandry
+
+**Goal:** Player can buy, feed, and care for alien animals that produce valuable goods (eggs, milk, wool).
+
+### New NPC — Zoop at the Spaceport
+
+A new pet-shop NPC stands near the bot workshop. Interact with Zoop to open the Exotic Pet Shop overlay.
+
+### Animal Types
+
+**Data — `src/constants.py`:**
+```python
+ANIMAL_TYPES = {
+    "zap_chicken": {
+        "name": "Zap-Chicken",
+        "cost": 500,
+        "produce": "Starlight Egg",
+        "produce_interval": 2,
+        "feed": {"glowroot": 1},
+        "sell_price": 300,
+        "color": (255, 220, 100),
+        "desc": "A tiny electric chicken from Nebula.",
+    },
+    "moo_droid": {
+        "name": "Moo-Droid",
+        "cost": 1200,
+        "produce": "Nebula Milk",
+        "produce_interval": 3,
+        "feed": {"cosmic_wheat": 2},
+        "sell_price": 600,
+        "color": (100, 200, 255),
+        "desc": "A robotic bovine from the outer rings.",
+    },
+    "fluffalo": {
+        "name": "Fluffalo",
+        "cost": 2500,
+        "produce": "Cosmic Wool",
+        "produce_interval": 4,
+        "feed": {"zargon_fruit": 1, "nebula_bloom": 1},
+        "sell_price": 1200,
+        "color": (255, 180, 255),
+        "desc": "A giant fluffy creature from Bloom.",
+    },
+}
+```
+
+**Animal Products** — new items that exist in the player's inventory:
+
+| Product | Sell Price | Used In |
+|---------|-----------|---------|
+| Starlight Egg | 75g | Cooking (new recipes), gifts |
+| Nebula Milk | 100g | Cooking, gifts |
+| Cosmic Wool | 200g | Crafting (M12), gifts |
+
+### New Recipes (bonus for M11)
+
+Add to existing `RECIPES` in constants:
+```python
+"starlight_omelette": {
+    "name": "Starlight Omelette",
+    "ingredients": {"starlight_melon": 1, "starlight_egg": 2},
+    "energy": 120,
+    "sell_price": 250,
+    "desc": "A fluffy, glowing omelette",
+},
+"nebula_milkshake": {
+    "name": "Nebula Milkshake",
+    "ingredients": {"nebula_bloom": 1, "nebula_milk": 1},
+    "energy": 140,
+    "sell_price": 300,
+    "desc": "A creamy, cosmic milkshake",
+},
+```
+
+### New GameState Fields
+
+```python
+self.animals = []               # [{type, days_since_produce, fed_today}]
+self.barn_capacity = 4          # upgraded via M10 building system
+self.pet_shop_active = False
+```
+
+### New Methods
+
+**`buy_animal(animal_id)`** — called from pet shop:
+```python
+def buy_animal(self, animal_id):
+    if len(self.animals) >= self.barn_capacity:
+        self.set_message("Your barn is full! Expand it first.")
+        return
+    at = ANIMAL_TYPES[animal_id]
+    if self.player.gold < at["cost"]:
+        self.set_message(f"Need {at['cost']}g!")
+        return
+    self.player.gold -= at["cost"]
+    self.animals.append({"type": animal_id, "days_since_produce": 0, "fed_today": False})
+    self.set_message(f"Bought {at['name']}!")
+```
+
+**`feed_animals()`** — called in `advance_day()`:
+- For each animal, check if player has the required feed item
+- If yes, consume from inventory, set `fed_today = True`
+- If no, set_message warns about unfed animals
+
+**`produce_animals()`** — called in `advance_day()` after feeding:
+- For fed animals, increment `days_since_produce`
+- If `days_since_produce >= produce_interval`, add product to inventory, reset counter
+- Unfed animals do not produce (counter does not increment)
+
+**`get_animal_product_price(product_name)`** — lookup sell price for product.
+
+### UI
+
+- **Pet Shop overlay** — separate panel at spaceport, shows 3 animals with cost, product, feed requirements
+- **Barn overlay** — accessed by pressing E on the barn building on the farm (M10)
+  - List of animals with name, days until next produce, fed status
+  - Shows products produced today
+  - "Sell Animal" option with gold return (half cost)
+- **HUD addition** — small animal icon + produce-ready indicator near energy/gold display when near barn
+
+### Animal Rendering
+
+- Animals rendered as small sprites near the barn building
+- `get_animal_surf(type)` in sprites.py — 32×32 pixel art for each species
+- Bouncy idle animation (simple 2-frame y-offset oscillation)
+
+### Files Changed
+
+| File | Change | Effort |
+|------|--------|--------|
+| `src/constants.py` | `ANIMAL_TYPES`, `RECIPES` additions (2 animal-based recipes) | Low |
+| `src/game.py` | `animals` field, `buy_animal()`, `feed_animals()`, `produce_animals()`, pet shop integration in `interact()`, day advance integration | Medium |
+| `main.py` | `draw_pet_shop()`, `draw_barn_overlay()`, animal render on farm, pet shop key handling | Medium |
+| `src/sprites.py` | `get_animal_surf()` for 3 animal types, product item icons | Low |
+
+---
+
+## Milestone 12 — Artisan Crafting & Processing
+
+**Goal:** Player can process crops and animal products into high-value artisan goods using processing machines on the farm.
+
+### Overview
+
+Unlike cooking (which restores energy), artisan crafting is purely profit-oriented. Some recipes are instant, others take multiple days to process (fermenting, aging).
+
+### Artisan Recipes
+
+**Data — `src/constants.py`:**
+```python
+ARTISAN_RECIPES = {
+    "glowroot_chips": {
+        "name": "Glowroot Chips",
+        "ingredients": {"glowroot": 2},
+        "sell_price": 100,
+        "processing_days": 0,
+        "desc": "Crunchy, savory chips",
+    },
+    "cosmic_flour": {
+        "name": "Cosmic Flour",
+        "ingredients": {"cosmic_wheat": 2},
+        "sell_price": 150,
+        "processing_days": 0,
+        "desc": "Fine, sparkling flour",
+    },
+    "zargon_wine": {
+        "name": "Zargon Wine",
+        "ingredients": {"zargon_fruit": 3},
+        "sell_price": 400,
+        "processing_days": 3,
+        "desc": "Aged purple wine",
+    },
+    "starlight_jam": {
+        "name": "Starlight Jam",
+        "ingredients": {"starlight_melon": 2},
+        "sell_price": 350,
+        "processing_days": 2,
+        "desc": "Sweet jam that glows",
+    },
+    "nebula_perfume": {
+        "name": "Nebula Perfume",
+        "ingredients": {"nebula_bloom": 3},
+        "sell_price": 600,
+        "processing_days": 2,
+        "desc": "Exquisite cosmic perfume",
+    },
+    "cosmic_wine": {
+        "name": "Cosmic Wine",
+        "ingredients": {"cosmic_wheat": 3, "zargon_fruit": 1},
+        "sell_price": 500,
+        "processing_days": 4,
+        "desc": "Wine aged among the stars",
+    },
+    "woolen_scarf": {
+        "name": "Woolen Scarf",
+        "ingredients": {"cosmic_wool": 2},
+        "sell_price": 500,
+        "processing_days": 0,
+        "desc": "A warm scarf from cosmic wool",
+    },
+    "aged_cheese": {
+        "name": "Aged Nebula Cheese",
+        "ingredients": {"nebula_milk": 3},
+        "sell_price": 450,
+        "processing_days": 3,
+        "desc": "Sharp cheese aged in nebula dust",
+    },
+}
+```
+
+### Processing Queue
+
+Rather than placing physical machines on the farm grid, use an abstract **Processing Queue** (like a crafting queue) accessible from the farmhouse or a workshop building.
+
+### New GameState Fields
+
+```python
+self.crafting_active = False
+self.processing_queue = []  # [{recipe_key, days_remaining, count}]
+```
+
+### New Methods
+
+**`start_crafting(recipe_key, count=1)`** — called from crafting UI:
+```python
+def start_crafting(self, recipe_key, count=1):
+    recipe = ARTISAN_RECIPES[recipe_key]
+    for ing, need in recipe["ingredients"].items():
+        if self.player.inventory.get(ing, 0) < need * count:
+            self.set_message("Missing ingredients!")
+            return
+    for ing, need in recipe["ingredients"].items():
+        self.player.remove_item(ing, need * count)
+    if recipe["processing_days"] == 0:
+        self.player.add_item(recipe["name"], count)
+        self.set_message(f"Crafted {count}x {recipe['name']}!")
+        self.add_skill_xp("farming", 2)
+    else:
+        self.processing_queue.append({
+            "recipe_key": recipe_key,
+            "days_remaining": recipe["processing_days"],
+            "count": count,
+        })
+        self.set_message(f"{recipe['name']} started! Ready in {recipe['processing_days']} days.")
+```
+
+**`process_crafting()`** — called in `advance_day()`:
+- Decrement `days_remaining` for each item in the queue
+- When an item reaches 0, add the finished good to inventory
+- Set a summary message: "X items finished processing!"
+
+**`collect_processed_goods()`** — called when player opens crafting UI:
+- Check queue for completed items, move them to inventory if any were missed
+
+### UI — Crafting Workshop Overlay
+
+Accessible from the farmhouse (press `C` cycles between cooking and crafting, or use a new key like `V`).
+
+- **Tabbed interface** or separate button: "Cook" / "Craft"
+- **Craft tab** shows all artisan recipes with:
+  - Recipe name, description, ingredients needed/available
+  - Sell price and processing time (highlight "instant" vs "X days")
+  - Number key to craft 1, Shift+key to craft 10
+- **Processing Queue** section at the bottom:
+  - Shows items in progress: name, days remaining, count
+  - Auto-collects completed items on open
+
+### Profit Margin Comparison
+
+Display a "profit analysis" line per recipe showing:
+- Input value (sum of ingredient sell prices)
+- Output value (artisan sell price)
+- Profit margin
+
+This helps the player decide what to craft.
+
+### Skill Perk Integration
+
+Farming Lv15 perk "Soil Whisperer" could be adjusted, or a new Exploration perk could reduce processing time by 1 day (min 1).
+
+### Files Changed
+
+| File | Change | Effort |
+|------|--------|--------|
+| `src/constants.py` | `ARTISAN_RECIPES` dict | Low |
+| `src/game.py` | `crafting_active`, `processing_queue`, `start_crafting()`, `process_crafting()`, `collect_processed_goods()`, integrate into `advance_day()` | Medium |
+| `main.py` | Crafting tab in kitchen UI or separate `draw_crafting()` overlay, processing queue display, key handling (`V` for workshop or `C`-cycle) | Medium |
+
+---
+
+## Milestone 13 — Fishing
+
+**Goal:** Player can fish at the spaceport pier for unique fish, with a timing-based mini-game and collection log.
+
+### Fishing Location
+
+A new spot on the spaceport map: the **Fishing Pier** at the east edge (tiles 25-29, 10-14). Press `E` at the pier to enter fishing mode.
+
+### Fish Types
+
+**Data — `src/constants.py`:**
+```python
+FISH_TYPES = {
+    "nebula_trout": {
+        "name": "Nebula Trout",
+        "difficulty": 1,
+        "sell_price": 50,
+        "seasons": ["Nebula", "Void", "Bloom", "Solar"],  # any
+        "weather": [],
+        "time_slots": [],
+        "color": (120, 180, 255),
+    },
+    "bloom_bass": {
+        "name": "Bloom Bass",
+        "difficulty": 1,
+        "sell_price": 60,
+        "seasons": ["Bloom"],
+        "weather": [],
+        "time_slots": [0, 1, 2, 3],
+        "color": (100, 220, 100),
+    },
+    "solar_salmon": {
+        "name": "Solar Salmon",
+        "difficulty": 2,
+        "sell_price": 120,
+        "seasons": ["Solar"],
+        "weather": [],
+        "time_slots": [4, 5, 6],
+        "color": (255, 180, 80),
+    },
+    "void_catfish": {
+        "name": "Void Catfish",
+        "difficulty": 2,
+        "sell_price": 100,
+        "seasons": ["Void"],
+        "weather": ["Void Fog"],
+        "time_slots": [6, 7],
+        "color": (80, 60, 120),
+    },
+    "starlight_sturgeon": {
+        "name": "Starlight Sturgeon",
+        "difficulty": 3,
+        "sell_price": 250,
+        "seasons": ["Nebula", "Bloom", "Solar"],
+        "weather": [],
+        "time_slots": [6, 7, 0, 1],
+        "color": (200, 220, 255),
+    },
+    "cosmic_koi": {
+        "name": "Cosmic Koi",
+        "difficulty": 4,
+        "sell_price": 500,
+        "seasons": ["Nebula"],
+        "weather": ["Meteor Shower"],
+        "time_slots": [2, 3],
+        "color": (255, 150, 200),
+    },
+}
+```
+
+**Conditions for catching each fish:**
+- Season, weather, and time slot must match the fish's requirements
+- Empty arrays = no restriction
+- If multiple fish match, pick randomly weighted by difficulty (harder = rarer)
+
+### Fishing Mini-Game
+
+A simple timing-based sequence:
+
+1. **Cast** — Press `SPACE` while facing water → line casts, bobber appears
+2. **Wait** — Bobber floats. After 1-3 random seconds, bobber shakes (visual + sound cue)
+3. **Hook** — Press `SPACE` when bobber shakes → fish hooked!
+   - Miss the window (0.5s) → fish escapes, try again
+4. **Reel** — A vertical progress bar appears. Press `SPACE` repeatedly to fill it.
+   - Each press adds progress. Progress drains continuously at rate = `difficulty * 0.3` / frame
+   - If bar fills → caught! If bar empties → fish escapes
+5. **Result** — Show fish sprite, name, size flavor text ("A tiny Nebula Trout!"), add to inventory
+
+### Fish Collection
+
+Track which fish the player has caught. Display as a log with empty/ filled silhouettes.
+
+```python
+self.fish_collection = {}  # {fish_id: True/False}
+self.fish_caught_total = 0
+```
+
+Collection log accessible from the skills screen (new tab) or from a sign at the pier.
+
+### New GameState Fields
+
+```python
+self.fishing_active = False
+self.fishing_state = "idle"         # "casting", "waiting", "hooked", "reeling", "caught"
+self.fishing_timer = 0              # countdown frames for bite
+self.fishing_bite_window = 0        # frames remaining to press SPACE after bite
+self.fishing_progress = 0.0         # 0-1 reel progress
+self.fishing_current_fish = None    # fish_id currently hooked, or None
+self.fishing_caught_fish = None     # fish just caught for display
+```
+
+### New Methods
+
+```python
+def start_fishing(self)              # enter fishing mode, set state to "casting"
+def cast_line(self)                  # set state to "waiting", random timer
+def hook_fish(self)                  # determine which fish, enter "reeling"
+def reel_press(self)                 # SPACE during reeling → add progress
+def update_fishing(self)             # called each frame, ticks timers, drains progress
+def catch_fish(self)                 # add to inventory, collection, show result
+def escape_fish(self)                # reset, show "It got away!"
+```
+
+**`update_fishing()`** is called from the render loop (not `advance_day`) — it works in real-time, not turn-based.
+
+### Fishing Display (overlay)
+
+- Dark water background with gentle wave animation
+- Bobber sprite at center (bobs up/down slowly)
+- When waiting: wavy line "~" particles for atmosphere
+- When hooked: splash particles, progress bar on right side
+- When caught: fish sprite + name + size text, press SPACE to dismiss
+- ESC to exit fishing mode early
+
+### New Recipes (bonus for M13)
+
+Add to `RECIPES`:
+```python
+"fish_tacos": {
+    "name": "Galaxy Fish Tacos",
+    "ingredients": {"nebula_trout": 1, "cosmic_wheat": 1},
+    "energy": 100,
+    "sell_price": 150,
+    "desc": "Tacos with a cosmic twist",
+},
+"sushi_platter": {
+    "name": "Nebula Sushi Platter",
+    "ingredients": {"solar_salmon": 1, "nebula_bloom": 1},
+    "energy": 160,
+    "sell_price": 300,
+    "desc": "Raw fish on seasoned cosmic rice",
+},
+```
+
+### Skill Synergy
+
+- Exploration skill grants fishing bonuses:
+  - Lv5: Fish bite 20% faster (less waiting)
+  - Lv10: Reel progress drains 20% slower
+  - Lv15: Rare fish are 2x more likely
+  - Lv20: Fish sell for 50% more
+
+### Files Changed
+
+| File | Change | Effort |
+|------|--------|--------|
+| `src/constants.py` | `FISH_TYPES`, new recipes | Low |
+| `src/game.py` | Fishing state fields, `start_fishing()`, `cast_line()`, `hook_fish()`, `reel_press()`, `update_fishing()`, `catch_fish()`, `escape_fish()`, fish collection | High |
+| `main.py` | `draw_fishing()` overlay, fishing mini-game rendering, pier interaction, fishing event handling (SPACE during game), ESC to exit | High |
+| `src/sprites.py` | `get_fish_surf(fish_id)`, `get_bobber_surf()` | Low |
+| `src/game.py` | Exploration skill perk integration (faster bite, slower drain, rare bonus, sell bonus) | Low |
+
+---
+
+## Milestone 14 — Town Reputation & Daily Quests
+
+**Goal:** Player earns reputation by completing daily quests and contributing to the spaceport, unlocking rank-based perks.
+
+### Town Ranks
+
+**Data — `src/constants.py`:**
+```python
+TOWN_RANKS = [
+    {"level": 0, "name": "Visitor",    "rep_needed": 0,    "perk": "No perks"},
+    {"level": 1, "name": "Resident",   "rep_needed": 50,   "perk": "10% discount at Zara's shop"},
+    {"level": 2, "name": "Citizen",    "rep_needed": 150,  "perk": "Traveling Merchant visits"},
+    {"level": 3, "name": "Benefactor", "rep_needed": 300,  "perk": "Upgraded bots available"},
+    {"level": 4, "name": "Hero",       "rep_needed": 500,  "perk": "Festival rewards doubled"},
+    {"level": 5, "name": "Legend",     "rep_needed": 1000, "perk": "Unlock Spaceport Observatory"},
+]
+```
+
+### Reputation Sources
+
+| Action | Rep Gained | Notes |
+|--------|-----------|-------|
+| Complete a quest | 15-30 (depends on difficulty) | Primary source |
+| Give a gift to NPC | 2 per heart gained | Ties to M3 |
+| Win a festival | 25 | Ties to M5 |
+| Sell items at shop | 1 per 100g earned | Small passive gain |
+
+### Daily Quests
+
+**Quest generation** — called in `advance_day()`:
+- Generate 3 quests from the pool of quest types
+- Each quest has a deadline (same day, complete before sleeping)
+
+**Quest types:**
+
+```python
+QUEST_TEMPLATES = [
+    {
+        "id": "deliver",
+        "name": "Delivery",
+        "desc": "Bring {count}x {item} to {npc}",
+        "min_count": 1, "max_count": 5,
+        "reward_gold": (50, 200),
+        "reward_rep": 15,
+    },
+    {
+        "id": "harvest",
+        "name": "Harvest",
+        "desc": "Harvest {count} mature {crop} crops",
+        "min_count": 5, "max_count": 20,
+        "reward_gold": (100, 500),
+        "reward_rep": 20,
+    },
+    {
+        "id": "fish",
+        "name": "Fishing",
+        "desc": "Catch {count} fish at the pier",
+        "min_count": 1, "max_count": 5,
+        "reward_gold": (80, 300),
+        "reward_rep": 25,
+    },
+    {
+        "id": "cook",
+        "name": "Cooking",
+        "desc": "Cook {count}x {dish}",
+        "min_count": 1, "max_count": 5,
+        "reward_gold": (100, 400),
+        "reward_rep": 20,
+    },
+]
+```
+
+**Quest tracking:**
+- Active quests stored in `active_quests` list with `{template_id, params, progress, completed}`
+- Progress is checked at relevant actions:
+  - Delivery: pressing E on target NPC while quest is active checks inventory and completes
+  - Harvest: increment on successful harvest, check at threshold
+  - Fish: increment on successful catch
+  - Cook: increment on successful cook
+
+### Traveling Merchant
+
+When the player reaches Rank 2 ("Citizen"), a traveling merchant named "Cosmo" visits the spaceport every 7 days.
+
+- Cosmo appears on the spaceport map (tile 5, 8) on visit days
+- His inventory is randomly generated from rare items:
+  - Rare seeds not normally available
+  - Unique furniture/decorations
+  - Artifact items that sell for high prices
+  - Fishing bait (increases rare fish chance for the day)
+
+```python
+def generate_merchant_items(self):
+    pool = [
+        {"name": "Ancient Seed", "price": 2000, "desc": "Grows into something unknown..."},
+        {"name": "Nebula Crystal", "price": 500, "desc": "A pretty decorative crystal"},
+        {"name": "Lucky Charm", "price": 1000, "desc": "+1 luck for the day"},
+        {"name": "Golden Bait", "price": 300, "desc": "Rare fish love this"},
+        {"name": "Cosmic Coffee Machine", "price": 5000, "desc": "Free coffee daily!"},
+    ]
+    self.merchant_items = random.sample(pool, 3)
+```
+
+### New GameState Fields
+
+```python
+self.reputation = 0
+self.active_quests = []             # [{template_id, params, progress, completed, reward_gold, reward_rep}]
+self.completed_quests = 0
+self.quest_board_active = False
+self.merchant_visit_day = -1        # next day Cosmo visits (set in advance_day based on rank)
+self.merchant_active = False
+self.merchant_items = []            # [{name, price, desc}]
+```
+
+### New Methods
+
+```python
+def add_reputation(self, amount)                         # add rep, check rank unlock
+def get_rank(self)                                       # return current rank level
+def get_rank_perks(self)                                 # list of unlocked perks
+def generate_daily_quests(self)                          # called in advance_day()
+def accept_quest(self, index)                            # add to active quests
+def check_quest_progress(self, quest_type, params)       # update quest progress
+def complete_quest(self, index)                          # grant rewards, remove quest
+def update_merchant(self)                                # called in advance_day()
+def generate_merchant_items(self)                        # random merchant inventory
+```
+
+### Rank Perk Implementation
+
+| Rank | Perk | Implementation |
+|------|------|---------------|
+| 1 | 10% shop discount | In `buy_item()`, multiply cost by 0.9 when rank >= 1 |
+| 2 | Traveling Merchant | `update_merchant()` sets `merchant_active = True` every 7 days |
+| 3 | Upgraded bots | Add 2 new bot types to `BOT_TYPES` with higher range/efficiency (loaded on rank up) |
+| 4 | Double festival rewards | In `end_festival()`, multiply gold reward by 2 |
+| 5 | Spaceport Observatory | Add new area tile on spaceport map with special interactions |
+
+### UI Changes
+
+- **Quest Board** — new overlay at spaceport (signpost near Zara's shop)
+  - Shows 3 daily quests with description, reward gold, rep
+  - Highlighted quest shows more detail
+  - `1/2/3` to accept, ESC to close
+  - Completed quests show "✓" — press key to claim reward
+
+- **HUD — Quest Tracker** — shown when away from quest board:
+  - Small section on the right side showing active quest(s) with progress bar
+  - Example: "Harvest 5/20 Cosmic Wheat ████░░░░░"
+
+- **Town Rank Display** — shown in HUD or in a new "Town" tab:
+  - Current rank name and progress to next rank
+  - List of unlocked perks
+
+- **Traveling Merchant** — when Cosmo is present:
+  - Special NPC sprite on spaceport
+  - E to interact → merchant shop overlay (same panel style as Zara's shop)
+  - Shows 3 items with price and description
+  - Number keys to buy, ESC to exit
+
+### Files Changed
+
+| File | Change | Effort |
+|------|--------|--------|
+| `src/constants.py` | `TOWN_RANKS`, `QUEST_TEMPLATES` | Low |
+| `src/game.py` | Reputation/quest fields, `add_reputation()`, `get_rank()`, `generate_daily_quests()`, `accept_quest()`, `check_quest_progress()`, `complete_quest()`, merchant system, `advance_day()` integration | High |
+| `main.py` | `draw_quest_board()`, `draw_merchant_shop()`, quest tracker HUD, rank display, key handling for quests/merchant, E interaction on quest board + merchant NPC | High |
+
+---
+
+## Dependency Graph (updated)
+
+```
+Milestone 1  (Spaceship)
+Milestone 2  (Farm Bots)
+  │
+Milestone 3  (NPC Schedules & Gifts)
+  │
+Milestone 4  (Weather & Seasons)
+  │
+Milestone 5  (Festivals)
+  │
+Milestone 6  (Save Slots)
+  │
+Milestone 7  (Cooking)
+  │
+Milestone 8  (UI Polish)
+  │
+Milestone 9  (Skills)
+  │
+Milestone 10 (Farm Expansion) — requires dynamic tile dimensions
+  │
+Milestone 11 (Animals) — requires M10 barn placement or farm space
+  │
+Milestone 12 (Artisan Crafting) — uses M10 crops + M11 animal products
+  │
+Milestone 13 (Fishing) — standalone, adds fish recipes to M7
+  │
+Milestone 14 (Town Reputation) — ties into M3 gifts, M5 festivals, M13 fishing
+  │
+Milestone 15 (Graphics Overhaul) — touches every visual function, no code deps
+```
+
+Milestones 10, 11, and 12 form a **economic progression chain**: expand farm → raise animals → process goods. Milestones 13 and 14 are largely independent. Milestone 15 touches nearly every visual file and is best done last to avoid merge conflicts, but has zero code dependency on M10-M14.
+
+---
+
+## Milestone 15 — Graphics Overhaul: Fonts, Sprites & Polish
+
+**Goal:** Replace the programmer-art aesthetic with a cohesive 16-bit look: a custom space-themed font, redrawn 32×32 sprites with more detail, UI panel styling, and visual polish across all screens.
+
+### Font Replacement
+
+**Current:** `pygame.font.SysFont("monospace", 14/18/24)` — system monospace, no character.
+
+**Target:** Load a custom pixel font `.ttf` bundled with the game.
+
+**Font choice — "Space Mono" or similar free pixel font:**
+- **Space Mono** (Google Fonts, OFL license) — a fixed-width sci-fi font with round glyphs
+- Fallback: **Perfect DOS VGA 437** — classic 8×16 pixel font, great for retro games
+- Bundle the `.ttf` file as `assets/fonts/space-mono.ttf` (or similar)
+
+**Implementation:**
+```python
+# In main.py, replace SysFont with loaded TTF:
+FONT_PATH = os.path.join(os.path.dirname(__file__), "assets", "fonts", "space-mono.ttf")
+font_small = pygame.font.Font(FONT_PATH, 14)
+font_med = pygame.font.Font(FONT_PATH, 18)
+font_large = pygame.font.Font(FONT_PATH, 24)
+```
+
+If the font file is missing, fall back gracefully to `pygame.font.SysFont("monospace", size)`.
+
+**Font sizing considerations:**
+- A pixel font at 14px may render differently than monospace — test and adjust sizes
+- Some glyphs (arrows, special chars) may be missing — test the `?`, `♥`, `→` characters used in the game
+- If `♥` is missing, use a text replacement like `<3` or draw a small heart surface
+
+### Sprite Overhaul — 16-Bit Detail Upgrade
+
+**Current sprites (in `src/sprites.py`):**
+- Mostly simple `draw_box()` calls and `set_pixel()` for pixel art
+- 32×32 tiles with basic shapes and flat colors
+- Functions: `get_tile_surf()`, `get_crop_icon()`, `get_crop_surf()`, `get_bot_surf()`, `get_ship_surf()`, `get_astronaut_surf()`, `get_npc_surf()`, `get_building_surf()`, `get_item_icon()`, `get_heart_surf()`
+
+**Target:** Redraw each sprite with:
+- Shading / highlights (at least 3 tones per color instead of 1-2)
+- Anti-aliased edges (via careful pixel placement, not AA filter)
+- Small detail accents (buttons, visor reflections, panel lines)
+- Consistent 16-bit palette (see palette section below)
+
+**Sprite priority list (high → low):**
+
+| Priority | Sprite | Current | Target |
+|----------|--------|---------|--------|
+| P0 | Player (astronaut) | 4-direction colored box with visor | Full helmet, suit details, boots, 3-frame idle bob |
+| P0 | Tiles (soil, water, grass) | Flat colored rectangles | Textured soil, rippled water, grass with tiny flowers |
+| P1 | Crops (6 types, 3-5 stages) | Simple colored boxes with dots | Recognizable plant shapes: roots, vines, fruits, leaves |
+| P1 | NPCs | Colored humanoid boxes | Distinct outfits, hair, accessories per NPC |
+| P2 | Bots | Rectangular boxes with lights | Panel lines, antenna, glowing indicator light |
+| P2 | Buildings | Simple colored rectangles | Roof overhangs, windows, doors, shadows |
+| P3 | Ship (3 tiers) | Basic geometric shapes | Wing details, cockpit, engine glow |
+| P3 | UI icons / items | Tiny colored squares | Recognizable item shapes (seed bag, crop icon) |
+| P3 | Heart / Festival / Misc | Simple shapes | Animated hearts, festival banners |
+
+**Sprite architecture upgrade:**
+- Most sprites are generated via `make_surface()` + `draw_box()` / `set_pixel()`
+- For 16-bit quality, consider **pre-drawing sprites as pixel data arrays** rather than calling many individual `set_pixel()` calls
+- New helper: `blit_sprite(surface, pixels_2d, x, y, palette)` where `pixels_2d` is a 2D array of palette indices
+- This makes sprites easier to author and edit
+
+**Example pixel data approach:**
+```python
+# Instead of 20 set_pixel calls, use a 2D array:
+PLAYER_SPRITE = [
+    "  WWWW  ",
+    " WBBBBW ",
+    "WBBBBBBW",
+    "WBYBBYBW",
+    "WBBBBBBW",
+    " WBBBBW ",
+    "  RRWW  ",
+    " RR  RR ",
+]
+# Where W=white, B=blue, Y=yellow, R=red mapped through a palette dict
+# In practice, use int indices into a palette list for compactness
+```
+
+**Palette system:**
+```python
+# Central palette for consistent colors across sprites
+PALETTE = {
+    "skin": [(255, 200, 170), (235, 180, 150), (200, 150, 120)],
+    "suit_white": [(240, 242, 245), (210, 215, 220), (180, 185, 190)],
+    "visor_blue": [(80, 200, 255), (50, 160, 220), (20, 100, 180)],
+    "metal_gray": [(200, 200, 200), (160, 160, 160), (120, 120, 120)],
+    # ... per crop, per bot, per NPC
+}
+```
+
+### UI Panel Styling
+
+**Current panels** (shop, inventory, save, etc.):
+- Dark blue rectangles (`(10, 10, 30)`) with thin colored borders
+- Flat, utilitarian look
+
+**Target panel style:**
+- 9-slice bordered panels with a subtle gradient (top edge lighter, bottom darker)
+- Rounded corner effect (via corner pixel patterns)
+- Title bar with accent color and subtle underline
+- Button-style list items with hover/select highlight (currently implemented with colored rects)
+- Drop shadow behind panels (semi-transparent black rect offset by 2-3px)
+
+**New helper in sprites.py:**
+```python
+def draw_panel(surface, x, y, w, h, border_color, title=None):
+    """Draw a styled 16-bit panel with 9-slice border and optional title bar."""
+    # 1. Drop shadow
+    shadow = pygame.Surface((w, h))
+    shadow.set_alpha(60)
+    shadow.fill((0, 0, 0))
+    surface.blit(shadow, (x + 3, y + 3))
+    # 2. Background gradient (top to bottom)
+    for i in range(h):
+        t = i / h
+        r = lerp(15, 8, t)
+        g = lerp(20, 10, t)
+        b = lerp(40, 25, t)
+        pygame.draw.line(surface, (r, g, b), (x, y + i), (x + w, y + i))
+    # 3. Border
+    pygame.draw.rect(surface, border_color, (x, y, w, h), 2)
+    # 4. Inner highlight (top edge lighter)
+    pygame.draw.line(surface, (r+30, g+30, b+30), (x+2, y+2), (x+w-3, y+2))
+```
+
+### Screen-Level Polish
+
+| Screen | Polish |
+|--------|--------|
+| **Farm** | Grass texture variation (2-3 grass tile variants), animated water on watered tiles, subtle parallax for background stars, crop leaves rustle (2-frame animation) |
+| **Spaceport** | Animated neon signs on buildings, floating particles (space dust), NPC nameplates with heart level |
+| **Planet Explore** | Animated background (slow color shift), ground with per-planet texture, blinking stars |
+| **Festivals** | Confetti particles, banner decorations on screen edges, spotlight effect on judges |
+| **Overlay transitions** | Fade-in (alpha ramp from 0→180 over 10 frames) when opening shops/menus |
+
+### Screen Shake & Juice
+
+Add subtle screen effects to make actions feel impactful:
+- **Hoe/Water/Scythe:** 2px vertical shake on use
+- **Harvest:** 4px shake + 5 sparkle particles
+- **Festival win:** Screen flash white (100ms) + 20 confetti particles
+- **Ship launch:** 6px shake, screen flash, fade to black
+
+```python
+# In GameState:
+self.screen_shake = 0          # frames remaining
+self.screen_shake_intensity = 0
+self.screen_flash = 0          # frames remaining
+self.screen_flash_color = (255, 255, 255)
+
+# In main.py render loop:
+if game.screen_shake > 0:
+    offset_x = random.randint(-game.screen_shake_intensity, game.screen_shake_intensity)
+    offset_y = random.randint(-game.screen_shake_intensity, game.screen_shake_intensity)
+    screen.blit(offscreen_buffer, (offset_x, offset_y))  # render to buffer first
+    game.screen_shake -= 1
+if game.screen_flash > 0:
+    flash = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    flash.set_alpha(100)
+    flash.fill(game.screen_flash_color)
+    screen.blit(flash, (0, 0))
+    game.screen_flash -= 1
+```
+
+### Particle System Enhancement
+
+**Current:** `self.particles` is a list of dicts with `x, y, color, life, max_life, size, vx, vy`. Drawn as simple colored squares.
+
+**Upgrade:**
+- Particle **types**: sparkle (star shape), leaf (small oval), smoke (fading circle), confetti (colored rectangle)
+- Particle **gravity**: some particles fall (gravity = 0.1 px/frame²)
+- Particle **fade**: alpha interpolation from 255 → 0 over lifetime
+- Particle **size variation**: random initial size 1-4px
+- Particle **color cycling**: for festival confetti, cycle through rainbow colors
+
+```python
+# New particle types:
+PARTICLE_TYPES = {
+    "sparkle": {"shape": "star",  "gravity": 0,   "fade": True,  "size_range": (1, 3)},
+    "leaf":    {"shape": "oval",  "gravity": 0.2, "fade": True,  "size_range": (2, 4)},
+    "smoke":   {"shape": "circle","gravity": -0.05,"fade": True, "size_range": (3, 6)},
+    "confetti":{"shape": "rect",  "gravity": 0.1, "fade": False, "size_range": (2, 4)},
+}
+```
+
+### Files Changed
+
+| File | Change | Effort |
+|------|--------|--------|
+| `assets/fonts/space-mono.ttf` | Bundle the font file (git LFS or raw URL) | Low |
+| `main.py` | Replace `SysFont` with `Font` from TTF, update all `draw_text()` calls, add screen shake/flash, fade transitions, particle upgrade | Medium |
+| `src/sprites.py` | Complete sprite overhaul: pixel data arrays for player, NPCs, crops, tiles, bots, buildings, ship, icons. Add `draw_panel()`, palette system. | High |
+| `src/game.py` | Add `screen_shake`, `screen_flash`, `screen_flash_color` fields, particle type support | Medium |
+| `src/constants.py` | No changes needed (colors defined in sprites) | None |
+
+### Dependency Note
+
+M15 touches almost every visual function in the codebase. It is recommended to implement **after M10-M14** to avoid merge conflicts with new features that also add sprites/UI. However, it has **no code dependency** on M10-M14 — it can be started at any time.
+
+---
+
+## Summary of Key Binds (M10-M15)
+
+| Key | M10 | M11 | M12 | M13 | M14 |
+|-----|-----|-----|-----|-----|-----|
+| `V` (spaceport) | Open building shop | — | — | — | — |
+| `E` on signpost | Open expansion menu | — | — | — | — |
+| `E` near barn | — | Open barn overlay | — | — | — |
+| `E` near pier | — | — | — | Start fishing | — |
+| `E` on quest board | — | — | — | — | Open quests |
+| `E` on merchant | — | — | — | — | Open merchant shop |
+| `C` (farm, cycle) | — | — | Toggle cook/craft | — | — |
+| `SPACE` (fishing) | — | — | — | Cast / Hook / Reel | — |
+| `1/2/3` (quests) | — | — | — | — | Accept quest |
+| `1/2/3` (merchant) | — | — | — | — | Buy item |
+
+---
+
+## Summary of New Files
+
+| File | Purpose |
+|------|---------|
+| `assets/fonts/space-mono.ttf` | Custom pixel font for all in-game text (M15) |

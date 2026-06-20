@@ -1,4 +1,5 @@
 import pygame
+import random
 from src.constants import *
 
 SPRITE_CACHE = {}
@@ -228,9 +229,12 @@ def get_building_surf(building_type):
     key = f"building_{building_type}"
     if key in SPRITE_CACHE:
         return SPRITE_CACHE[key]
-    w, h = TILE_SIZE * 3, TILE_SIZE * 3
+    bw, bh = BUILDING_TYPES.get(building_type, {}).get("size", (3, 3))
+    w, h = bw * TILE_SIZE, bh * TILE_SIZE
     s = make_surface(w, h)
     if building_type == "player_house":
+        w, h = TILE_SIZE * 3, TILE_SIZE * 3
+        s = make_surface(w, h)
         draw_box(s, 0, 0, w, h, (160, 140, 120), True)
         draw_box(s, 4, 4, w - 8, h - 8, (180, 160, 140), True)
         draw_box(s, w // 2 - 8, h - 20, 16, 20, (100, 80, 60), True)
@@ -239,6 +243,8 @@ def get_building_surf(building_type):
             for xx in range(8, w - 8, 12):
                 set_pixel(s, xx, yy, (200, 180, 160))
     elif building_type == "shop":
+        w, h = TILE_SIZE * 3, TILE_SIZE * 3
+        s = make_surface(w, h)
         draw_box(s, 0, 0, w, h, (100, 60, 140), True)
         draw_box(s, 4, 4, w - 8, h - 8, (130, 90, 170), True)
         draw_box(s, 8, 4, w - 16, 8, (160, 120, 200), True)
@@ -268,6 +274,8 @@ def get_building_surf(building_type):
         for knob_y in range(44, 52, 4):
             set_pixel(s, 48, knob_y, (200, 170, 100))
     elif building_type == "bar":
+        w, h = TILE_SIZE * 3, TILE_SIZE * 3
+        s = make_surface(w, h)
         draw_box(s, 0, 0, w, h, (80, 40, 40), True)
         draw_box(s, 4, 4, w - 8, h - 8, (110, 60, 60), True)
         draw_box(s, 8, 4, w - 16, 8, (150, 80, 80), True)
@@ -303,11 +311,110 @@ def get_building_surf(building_type):
             set_pixel(s, mx, my - 2, (255, 220, 100))
             set_pixel(s, mx, my + 2, (255, 220, 100))
     elif building_type == "house":
+        w, h = TILE_SIZE * 3, TILE_SIZE * 3
+        s = make_surface(w, h)
         draw_box(s, 0, 0, w, h, (140, 160, 180), True)
         draw_box(s, 4, 4, w - 8, h - 8, (160, 180, 200), True)
         draw_box(s, w // 2 - 8, h - 20, 16, 20, (100, 120, 140), True)
         draw_box(s, 8, 12, 8, 8, (180, 220, 255), True)
         draw_box(s, w - 16, 12, 8, 8, (180, 220, 255), True)
+    elif building_type == "storage_shed":
+        draw_box(s, 0, 0, w, h, (90, 70, 45), True)
+        draw_box(s, 2, 2, w - 4, h - 4, (110, 85, 55), True)
+        draw_box(s, 4, 4, w - 8, h - 8, (130, 100, 65), True)
+        for plank_y in range(6, h - 6, 6):
+            hline(s, 4, plank_y, w - 8, (100, 75, 45))
+        draw_box(s, 0, 0, w, 3, (70, 55, 35), True)
+        draw_box(s, 1, 0, w - 2, 2, (85, 65, 40), True)
+        draw_box(s, 0, h - 4, w, 4, (70, 55, 35), True)
+        dw = w // 3 - 4
+        dh = h - 16
+        dx1 = 4
+        dx2 = dx1 + dw + 4
+        for ddx, ddx2 in [(dx1, dx2)]:
+            draw_box(s, ddx, 10, dw, dh, (70, 55, 35), True)
+            draw_box(s, ddx + 1, 10, dw - 2, dh, (85, 65, 45), True)
+            draw_box(s, ddx + 2, 10, dw - 4, dh, (100, 80, 55), True)
+        for ddx in [dx1, dx2]:
+            set_pixel(s, ddx + dw - 3, 10 + dh // 2, (180, 150, 70))
+            set_pixel(s, ddx + dw - 3, 10 + dh // 2 + 1, (200, 170, 90))
+        roof_peak = 4
+        for dy in range(roof_peak):
+            rw = w - (dy * 2)
+            rx = dy
+            draw_box(s, rx, -roof_peak + dy, rw, 1, (60, 45, 25), True)
+            draw_box(s, rx, -roof_peak + dy + 1, rw, 1, (75, 55, 35), True)
+    elif building_type == "well":
+        color = (60, 100, 180)
+        sh = (40, 70, 130)
+        hl = (80, 140, 220)
+        draw_box(s, 4, 8, 24, 20, sh, True)
+        draw_box(s, 5, 9, 22, 18, color, True)
+        draw_box(s, 6, 10, 20, 16, hl, True)
+        draw_box(s, 10, 11, 12, 14, (50, 90, 170), True)
+        draw_box(s, 11, 12, 10, 12, (80, 130, 210), True)
+        for wx in range(8, 24, 4):
+            for wy in range(13, 22, 4):
+                set_pixel(s, wx, wy, (150, 200, 255))
+        draw_box(s, 2, 6, 28, 4, (80, 70, 60), True)
+        draw_box(s, 3, 6, 26, 3, (100, 85, 70), True)
+        draw_box(s, 4, 6, 24, 2, (120, 100, 80), True)
+        draw_box(s, 4, 1, 24, 6, sh, True)
+        draw_box(s, 5, 1, 22, 5, color, True)
+        draw_box(s, 6, 1, 20, 4, hl, True)
+        draw_box(s, 14, 2, 4, 4, (50, 90, 170), True)
+        for i in range(3):
+            set_pixel(s, 12 + i * 4, 0, (150, 140, 120))
+    elif building_type == "greenhouse":
+        frame_color = (140, 120, 100)
+        glass_color = (150, 220, 200)
+        glass_hl = (200, 255, 240)
+        # base
+        draw_box(s, 0, 0, w, h, frame_color, True)
+        draw_box(s, 2, 2, w - 4, h - 4, (100, 90, 75), True)
+        draw_box(s, 4, 4, w - 8, h - 8, (80, 75, 60), True)
+        # glass panels
+        for gy in range(3):
+            for gx in range(4):
+                px = 6 + gx * ((w - 12) // 4)
+                py = 6 + gy * ((h - 12) // 3)
+                pw = (w - 12) // 4 - 2
+                ph = (h - 12) // 3 - 2
+                draw_box(s, px, py, pw, ph, glass_color, True)
+                draw_box(s, px + 1, py + 1, pw - 2, ph - 2, glass_hl, True)
+                # plants inside
+                if gy < 2:
+                    plant_color = (60 + gx * 20, 140 + gy * 30, 60 + gx * 10)
+                    for _ in range(3):
+                        sx = px + random.randint(2, pw - 3)
+                        sy = py + random.randint(2, ph - 3)
+                        set_pixel(s, sx, sy, plant_color)
+                        set_pixel(s, sx, sy + 1, (plant_color[0] + 30, plant_color[1] + 20, plant_color[2]))
+        # frame lines
+        for gy in range(3):
+            for gx in range(4):
+                px = 6 + gx * ((w - 12) // 4)
+                py = 6 + gy * ((h - 12) // 3)
+                pw = (w - 12) // 4 - 2
+                ph = (h - 12) // 3 - 2
+                draw_box(s, px, py, pw, ph, frame_color, False)
+    elif building_type == "shipping_bin":
+        draw_box(s, 2, 4, 28, 28, (100, 70, 45), True)
+        draw_box(s, 3, 5, 26, 26, (120, 85, 55), True)
+        draw_box(s, 4, 6, 24, 24, (140, 100, 65), True)
+        for plank_y in range(8, 28, 4):
+            hline(s, 4, plank_y, 24, (110, 80, 50))
+        draw_box(s, 2, 4, 28, 3, (80, 60, 35), True)
+        draw_box(s, 3, 4, 26, 2, (100, 80, 50), True)
+        draw_box(s, 2, 0, 28, 6, (80, 60, 35), True)
+        draw_box(s, 3, 0, 26, 5, (100, 80, 50), True)
+        draw_box(s, 4, 0, 24, 4, (120, 100, 65), True)
+        set_pixel(s, 16, 2, (180, 160, 80))
+        set_pixel(s, 16, 3, (200, 180, 100))
+        draw_box(s, 2, 30, 28, 2, (80, 55, 35), True)
+        draw_box(s, 3, 30, 26, 1, (100, 70, 45), True)
+        draw_box(s, w - 2, 6, 1, 24, (90, 60, 40), True)
+        draw_box(s, 1, 6, 1, 24, (90, 60, 40), True)
     s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s

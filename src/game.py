@@ -283,6 +283,7 @@ class GameState:
         self.bot_shop_active = False
         self.placement_mode = None
         self.bots = []
+        self.upkeep_failed = False
         self.gift_mode = False
         self.bar_active = False
         self.ship_tier = 0
@@ -307,6 +308,18 @@ class GameState:
         self.cooking_active = False
         self.skills = {"farming": 0, "exploration": 0, "cooking": 0, "social": 0}
         self.skills_active = False
+
+        # Farm Expansion & Buildings
+        self.farm_expansion_tier = 0
+        self.farm_cols = FARM_EXPANSIONS[0]["cols"]
+        self.farm_rows = FARM_EXPANSIONS[0]["rows"]
+        self.farm_off_x = FARM_EXPANSIONS[0]["off_x"]
+        self.farm_off_y = FARM_EXPANSIONS[0]["off_y"]
+        self.buildings = []
+        self.build_mode = None
+        self.shipping_bin_contents = {}
+        self.expand_menu_active = False
+        self.building_shop_active = False
 
     def add_particles(self, x, y, color, count=8):
         for _ in range(count):
@@ -454,7 +467,6 @@ class GameState:
                 self.festival_today = key
                 self.set_message(f"Today: {fest['name']}! Visit the Space Port!")
                 break
-        self.run_bots()
         for npc in self.npcs:
             npc.talked_today = False
         season_name = SEASONS[self.season_index]
@@ -463,13 +475,31 @@ class GameState:
         growth_rate = mod + weather_mod
         if self.get_skill_level("farming") >= 5:
             growth_rate *= 1.25
+        # Check which map tiles are inside a greenhouse
+        greenhouse_tiles = set()
+        for b in self.buildings:
+            if b["type"] == "greenhouse":
+                g_tx = b["tile_x"]
+                g_ty = b["tile_y"]
+                for dy in range(3):
+                    for dx in range(4):
+                        greenhouse_tiles.add((g_tx + dx, g_ty + dy))
         for row in self.tiles:
             for tile in row:
-                tile.grow(growth_rate)
+                map_tx = tile.x + self.farm_off_x
+                map_ty = tile.y + self.farm_off_y
+                in_greenhouse = (map_tx, map_ty) in greenhouse_tiles
+                if in_greenhouse:
+                    tile.grow(1.0)
+                else:
+                    tile.grow(growth_rate)
                 tile.watered = False
                 if tile.soil_state == "watered":
                     tile.soil_state = "tilled"
         self.set_message(f"Day {self.day} - {TIME_NAMES[0]} ({SEASONS[self.season_index]}, {self.current_weather['name']})")
+        self.process_shipping_bin()
+        self.apply_buildings()
+        self.run_bots()
 
     def save_game(self, slot=0):
         data = {
@@ -485,6 +515,13 @@ class GameState:
                  "timer": t.crop_timer, "watered": t.watered, "regrows": t.crop_regrows}
                 for row in self.tiles for t in row
             ],
+            "farm_rows": self.farm_rows,
+            "farm_cols": self.farm_cols,
+            "farm_off_x": self.farm_off_x,
+            "farm_off_y": self.farm_off_y,
+            "farm_expansion_tier": self.farm_expansion_tier,
+            "buildings": self.buildings,
+            "shipping_bin_contents": self.shipping_bin_contents,
             "npc_hearts": {n.id: n.heart_level for n in self.npcs},
             "married_to": self.married_to,
             "bots": [{"type": b.bot_type, "x": b.array_x, "y": b.array_y, "active": b.active}
@@ -515,18 +552,31 @@ class GameState:
         self.player.energy = data["energy"]
         self.player.inventory = data["inventory"]
         self.player.seed_inventory = data.get("seed_inventory", {})
+        self.farm_expansion_tier = data.get("farm_expansion_tier", 0)
+        self.farm_cols = data.get("farm_cols", FARM_EXPANSIONS[0]["cols"])
+        self.farm_rows = data.get("farm_rows", FARM_EXPANSIONS[0]["rows"])
+        self.farm_off_x = data.get("farm_off_x", FARM_EXPANSIONS[0]["off_x"])
+        self.farm_off_y = data.get("farm_off_y", FARM_EXPANSIONS[0]["off_y"])
+        self.tiles = []
         idx = 0
-        for r in range(TILLABLE_ROWS):
-            for c in range(TILLABLE_COLS):
-                td = data["tiles"][idx]
-                self.tiles[r][c].soil_state = td["soil"]
-                self.tiles[r][c].crop_type = td.get("crop")
-                self.tiles[r][c].crop = td.get("crop")
-                self.tiles[r][c].crop_stage = td["stage"]
-                self.tiles[r][c].crop_timer = td["timer"]
-                self.tiles[r][c].watered = td["watered"]
-                self.tiles[r][c].crop_regrows = td.get("regrows", False)
+        for r in range(self.farm_rows):
+            row = []
+            for c in range(self.farm_cols):
+                tile = Tile(c, r)
+                if idx < len(data["tiles"]):
+                    td = data["tiles"][idx]
+                    tile.soil_state = td["soil"]
+                    tile.crop_type = td.get("crop")
+                    tile.crop = td.get("crop")
+                    tile.crop_stage = td["stage"]
+                    tile.crop_timer = td["timer"]
+                    tile.watered = td["watered"]
+                    tile.crop_regrows = td.get("regrows", False)
+                row.append(tile)
                 idx += 1
+            self.tiles.append(row)
+        self.buildings = data.get("buildings", [])
+        self.shipping_bin_contents = data.get("shipping_bin_contents", {})
         if "npc_hearts" in data:
             for nid, h in data["npc_hearts"].items():
                 for npc in self.npcs:
@@ -594,9 +644,9 @@ class GameState:
 
     def get_tile_at(self, tx, ty):
         if self.player.current_map == "farm":
-            tx -= FARM_TILES_OFFSET_X
-            ty -= FARM_TILES_OFFSET_Y
-        if 0 <= ty < TILLABLE_ROWS and 0 <= tx < TILLABLE_COLS:
+            tx -= self.farm_off_x
+            ty -= self.farm_off_y
+        if 0 <= ty < self.farm_rows and 0 <= tx < self.farm_cols:
             return self.tiles[ty][tx]
         return None
 
@@ -692,6 +742,92 @@ class GameState:
             self.set_message(f"Upgraded to {tier['name']}!")
         else:
             self.set_message(f"Need {tier['cost']}g to upgrade. ({tier['name']})")
+
+    def buy_expansion(self):
+        next_tier_idx = self.farm_expansion_tier + 1
+        if next_tier_idx >= len(FARM_EXPANSIONS):
+            self.set_message("Farm is already max size!")
+            return
+        next_tier = FARM_EXPANSIONS[next_tier_idx]
+        if self.player.gold < next_tier["cost"]:
+            self.set_message(f"Need {next_tier['cost']}g to expand!")
+            return
+        self.player.gold -= next_tier["cost"]
+        self.farm_expansion_tier = next_tier_idx
+        tier = FARM_EXPANSIONS[self.farm_expansion_tier]
+        old_rows = len(self.tiles)
+        old_cols = len(self.tiles[0]) if old_rows > 0 else 0
+        new_rows = tier["rows"]
+        new_cols = tier["cols"]
+        for r in range(new_rows):
+            if r < old_rows:
+                for c in range(old_cols, new_cols):
+                    self.tiles[r].append(Tile(c, r))
+            else:
+                self.tiles.append([Tile(c, r) for c in range(new_cols)])
+        self.farm_cols = tier["cols"]
+        self.farm_rows = tier["rows"]
+        self.farm_off_x = tier["off_x"]
+        self.farm_off_y = tier["off_y"]
+        self.set_message(f"Farm expanded! ({self.farm_cols}x{self.farm_rows})")
+
+    def buy_building(self, building_id):
+        bt = BUILDING_TYPES[building_id]
+        if self.player.gold < bt["cost"]:
+            self.set_message(f"Need {bt['cost']}g to build {bt['name']}!")
+            return
+        self.player.gold -= bt["cost"]
+        self.build_mode = building_id
+        self.building_shop_active = False
+        self.set_message(f"Placed {bt['name']}! Walk to the farm and press E to place it.")
+
+    def place_building(self):
+        if self.build_mode is None:
+            return
+        px = self.player.x // TILE_SIZE
+        py = self.player.y // TILE_SIZE
+        bt = BUILDING_TYPES[self.build_mode]
+        bw, bh = bt["size"]
+        # Check if within tillable area
+        if not (self.farm_off_x <= px < self.farm_off_x + self.farm_cols and
+                self.farm_off_y <= py < self.farm_off_y + self.farm_rows):
+            self.set_message("Can't place here — must be on tillable soil!")
+            return
+        # Check if area overlaps another building
+        for b in self.buildings:
+            ox = b["tile_x"]
+            oy = b["tile_y"]
+            obw, obh = BUILDING_TYPES[b["type"]]["size"]
+            if px < ox + obw and px + bw > ox and py < oy + obh and py + bh > oy:
+                self.set_message("Can't place here — overlaps another building!")
+                return
+        self.buildings.append({"type": self.build_mode, "tile_x": px, "tile_y": py})
+        self.build_mode = None
+        self.set_message(f"{bt['name']} built!")
+
+    def process_shipping_bin(self):
+        if not self.shipping_bin_contents:
+            return
+        total = 0
+        for item_name, count in self.shipping_bin_contents.items():
+            price = CROP_TYPES[item_name]["sell_price"] * count
+            self.player.gold += price
+            total += count
+        self.shipping_bin_contents = {}
+        self.set_message(f"Shipping bin earned {total} item sales!")
+
+    def apply_buildings(self):
+        for b in self.buildings:
+            if b["type"] == "well":
+                cx = b["tile_x"]
+                cy = b["tile_y"]
+                for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+                    ax = cx + dx - self.farm_off_x
+                    ay = cy + dy - self.farm_off_y
+                    if 0 <= ay < self.farm_rows and 0 <= ax < self.farm_cols:
+                        tile = self.tiles[ay][ax]
+                        if tile.soil_state == "tilled" and not tile.watered:
+                            tile.water()
 
     def refuel_ship(self):
         tier = SHIP_TIERS[self.ship_tier]
@@ -791,14 +927,34 @@ class GameState:
 
         if self.player.current_map == "farm":
             for bot in self.bots:
-                wx = bot.array_x + FARM_TILES_OFFSET_X
-                wy = bot.array_y + FARM_TILES_OFFSET_Y
+                wx = bot.array_x + self.farm_off_x
+                wy = bot.array_y + self.farm_off_y
                 if abs(px - wx) <= 0 and abs(py - wy) <= 0:
                     if not bot.active:
                         self.reactivate_bot(bot)
                         return
             if abs(px - 8) <= 1 and abs(py - 2) <= 1:
                 self.sleep_prompt = True
+                return
+            # Building interaction
+            for b in self.buildings:
+                bt = BUILDING_TYPES[b["type"]]
+                bw, bh = bt["size"]
+                if b["tile_x"] <= px < b["tile_x"] + bw and b["tile_y"] <= py < b["tile_y"] + bh:
+                    if b["type"] == "shipping_bin" and self.player.get_facing_tile():
+                        self.open_shipping_bin()
+                        return
+                    elif b["type"] == "storage_shed":
+                        self.set_message("Storage Shed: extra inventory space!")
+                        return
+                    elif b["type"] == "greenhouse":
+                        self.set_message("Greenhouse: crops here ignore season penalties!")
+                        return
+            # Signpost at southeast edge of tillable area
+            sign_x = self.farm_off_x + self.farm_cols
+            sign_y = self.farm_off_y + self.farm_rows
+            if abs(px - sign_x) <= 1 and abs(py - sign_y) <= 1:
+                self.expand_menu_active = True
                 return
             return
 
@@ -812,7 +968,6 @@ class GameState:
                             return
                     self.start_dialogue(npc)
                     return
-
             if 8 <= px <= 12 and 4 <= py <= 8:
                 self.start_shop()
                 return
@@ -836,6 +991,10 @@ class GameState:
                                 return
                         self.start_dialogue(npc)
                         return
+
+    def open_shipping_bin(self):
+        self.subscreen = "shipping_bin"
+        self.set_message("Drop items to sell overnight. Press I to transfer items.")
 
     def start_dialogue(self, npc):
         if npc.talked_today:
@@ -959,10 +1118,16 @@ class GameState:
         if self.player.current_map == "farm":
             rects.append(pygame.Rect(7 * ts, 0, 3 * ts, 3 * ts))
             tree_positions = [(1, 4), (1, 7), (1, 10), (0, 15),
-                              (2 + TILLABLE_COLS + 2, 3), (2 + TILLABLE_COLS + 2, 8)]
+                              (self.farm_off_x + self.farm_cols + 2, 3),
+                              (self.farm_off_x + self.farm_cols + 2, 8)]
             for tx, ty in tree_positions:
                 if tx < FARM_TILES_X and ty < FARM_TILES_Y:
                     rects.append(pygame.Rect(tx * ts, ty * ts, ts, ts))
+            # Building solids
+            for b in self.buildings:
+                bt = BUILDING_TYPES[b["type"]]
+                bw, bh = bt["size"]
+                rects.append(pygame.Rect(b["tile_x"] * ts, b["tile_y"] * ts, bw * ts, bh * ts))
         else:
             rects.append(pygame.Rect(8 * ts, 2 * ts, 3 * ts, 3 * ts))
             rects.append(pygame.Rect(15 * ts, 2 * ts, 3 * ts, 3 * ts))
@@ -987,9 +1152,9 @@ class GameState:
             return
         px = self.player.x // TILE_SIZE
         py = self.player.y // TILE_SIZE
-        ax = px - FARM_TILES_OFFSET_X
-        ay = py - FARM_TILES_OFFSET_Y
-        if 0 <= ax < TILLABLE_COLS and 0 <= ay < TILLABLE_ROWS:
+        ax = px - self.farm_off_x
+        ay = py - self.farm_off_y
+        if 0 <= ax < self.farm_cols and 0 <= ay < self.farm_rows:
             for bot in self.bots:
                 if bot.array_x == ax and bot.array_y == ay:
                     self.set_message("A bot is already there!")
@@ -1002,13 +1167,9 @@ class GameState:
             self.set_message("Can't place a bot there.")
 
     def run_bots(self):
-        total_upkeep = sum(BOT_TYPES[b.bot_type]["upkeep"] for b in self.bots if b.active)
-        if self.player.gold < total_upkeep:
-            for b in self.bots:
-                b.active = False
-            self.set_message("Not enough gold for bot upkeep! Bots deactivated.")
-            return
-        self.player.gold -= total_upkeep
+        watered = 0
+        harvested = 0
+        harvest_names = []
         for bot in self.bots:
             if not bot.active:
                 continue
@@ -1019,16 +1180,38 @@ class GameState:
                         continue
                     ax = bot.array_x + dx
                     ay = bot.array_y + dy
-                    if 0 <= ay < TILLABLE_ROWS and 0 <= ax < TILLABLE_COLS:
+                    if 0 <= ay < self.farm_rows and 0 <= ax < self.farm_cols:
                         tile = self.tiles[ay][ax]
                         if bt["action"] == "water" and tile.soil_state == "tilled" and not tile.watered:
                             tile.water()
+                            watered += 1
                         elif bt["action"] == "harvest" and tile.is_mature():
                             value, crop_type = tile.harvest()
                             if crop_type:
                                 count = random.randint(1, 3)
                                 self.player.add_item(crop_type, count)
                                 self.player.gold += value
+                                harvested += count
+                                name = CROP_TYPES[crop_type]["name"]
+                                if name not in harvest_names:
+                                    harvest_names.append(name)
+
+        total_upkeep = sum(BOT_TYPES[b.bot_type]["upkeep"] for b in self.bots if b.active)
+        if total_upkeep > 0 and self.player.gold < total_upkeep:
+            for b in self.bots:
+                b.active = False
+            self.upkeep_failed = True
+        elif total_upkeep > 0:
+            self.player.gold -= total_upkeep
+            self.upkeep_failed = False
+
+        if self.upkeep_failed:
+            self.set_message("Not enough gold for bot upkeep! Bots deactivated.")
+        elif harvested > 0:
+            items = ", ".join(harvest_names)
+            self.set_message(f"Bots harvested {harvested}x {items}!")
+        elif watered > 0:
+            self.set_message(f"Bots watered {watered} tile(s).")
 
     @staticmethod
     def get_slot_info(slot):

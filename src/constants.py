@@ -323,6 +323,46 @@ FARM_TILES_Y = 20
 SPACEPORT_TILES_X = 30
 SPACEPORT_TILES_Y = 20
 
+FARM_EXPANSIONS = [
+    {"tier": 0, "cost": 0,     "cols": 14, "rows": 10, "off_x": 2, "off_y": 5},
+    {"tier": 1, "cost": 1000,  "cols": 16, "rows": 12, "off_x": 1, "off_y": 4},
+    {"tier": 2, "cost": 3000,  "cols": 18, "rows": 14, "off_x": 1, "off_y": 3},
+    {"tier": 3, "cost": 6000,  "cols": 20, "rows": 16, "off_x": 0, "off_y": 2},
+    {"tier": 4, "cost": 10000, "cols": 22, "rows": 18, "off_x": 0, "off_y": 1},
+    {"tier": 5, "cost": 15000, "cols": 24, "rows": 20, "off_x": 0, "off_y": 0},
+]
+
+BUILDING_TYPES = {
+    "storage_shed": {
+        "name": "Storage Shed",
+        "cost": 2000,
+        "size": (3, 2),
+        "desc": "+24 extra inventory slots",
+        "color": (120, 80, 40),
+    },
+    "well": {
+        "name": "Well",
+        "cost": 1500,
+        "size": (1, 1),
+        "desc": "Auto-waters 4 adjacent tiles each day",
+        "color": (60, 100, 180),
+    },
+    "greenhouse": {
+        "name": "Greenhouse",
+        "cost": 5000,
+        "size": (4, 3),
+        "desc": "Crops inside ignore season/weather penalties",
+        "color": (150, 220, 150),
+    },
+    "shipping_bin": {
+        "name": "Shipping Bin",
+        "cost": 500,
+        "size": (1, 1),
+        "desc": "Drop items to sell overnight",
+        "color": (180, 100, 60),
+    },
+}
+
 BOT_TYPES = {
     "water_bot": {
         "name": "Water-Bot",

@@ -71,7 +71,11 @@ def draw_hud():
     if game.gift_mode:
         draw_text(screen, "GIFT MODE", 750, 60, PINK, font_small)
 
-    if game.player.current_map == "farm" and not any([game.dialogue_active, game.shop_active, game.bot_shop_active, game.hangar_active, game.inventory_active, game.seed_select_active, game.sleep_prompt, game.bar_active, game.festival_active, game.save_menu_active, game.cooking_active]):
+    shed_count = sum(1 for b in game.buildings if b["type"] == "storage_shed")
+    if shed_count > 0:
+        draw_text(screen, f"Storage Shed (+{shed_count * 24} slots)", 10, 80, CYAN, font_small)
+
+    if game.player.current_map == "farm" and not any([game.dialogue_active, game.shop_active, game.bot_shop_active, game.hangar_active, game.inventory_active, game.seed_select_active, game.sleep_prompt, game.bar_active, game.festival_active, game.save_menu_active, game.cooking_active, game.expand_menu_active, game.building_shop_active, game.subscreen == "shipping_bin", game.build_mode is not None]):
         ftx, fty = game.player.get_facing_tile()
         tile = game.get_tile_at(ftx, fty)
         if tile and tile.crop:
@@ -559,12 +563,16 @@ def draw_farm():
             screen.set_at((sx, sy), WHITE)
 
     ground_y = 3 * TILE_SIZE
+    off_x = game.farm_off_x
+    off_y = game.farm_off_y
+    f_cols = game.farm_cols
+    f_rows = game.farm_rows
     for row in range(ground_y // TILE_SIZE, FARM_TILES_Y):
         for col in range(FARM_TILES_X):
             draw_x = col * TILE_SIZE
             draw_y = row * TILE_SIZE
-            if 5 <= row < 5 + TILLABLE_ROWS and 2 <= col < 2 + TILLABLE_COLS:
-                tile = game.tiles[row - 5][col - 2]
+            if off_y <= row < off_y + f_rows and off_x <= col < off_x + f_cols:
+                tile = game.tiles[row - off_y][col - off_x]
                 if tile.soil_state == "watered":
                     screen.blit(get_tile_surf("watered"), (draw_x, draw_y))
                 elif tile.soil_state == "tilled":
@@ -583,11 +591,11 @@ def draw_farm():
                                 wx, wy = random.randint(0, TILE_SIZE - 1), random.randint(0, TILE_SIZE - 1)
                                 set_pixel(wd, wx, wy, (150, 200, 255, 100))
                             screen.blit(wd, (draw_x, draw_y))
-            elif row == 5 and (col < 2 or col >= 2 + TILLABLE_COLS):
+            elif row == off_y and (col < off_x or col >= off_x + f_cols):
                 screen.blit(get_tile_surf("grass"), (draw_x, draw_y))
-            elif row >= 5 + TILLABLE_ROWS:
+            elif row >= off_y + f_rows:
                 screen.blit(get_tile_surf("grass"), (draw_x, draw_y))
-            elif row < 5:
+            elif row < off_y:
                 screen.blit(get_tile_surf("grass"), (draw_x, draw_y))
 
     player_house = get_building_surf("player_house")
@@ -595,15 +603,30 @@ def draw_farm():
 
     draw_text(screen, "Your Farm", 7 * TILE_SIZE + TILE_SIZE, -2, WHITE, font_small)
 
-    path_exit_tx, path_exit_ty = 2 + TILLABLE_COLS + 1, 5 + TILLABLE_ROWS + 1
-    ex, ey = (2 + TILLABLE_COLS + 1) * TILE_SIZE, (5 + TILLABLE_ROWS + 1) * TILE_SIZE
-    screen.blit(get_tile_surf("path"), (ex, ey))
-    draw_text(screen, "SPACE PORT ->", ex + TILE_SIZE // 2, ey + TILE_SIZE // 2 - 8, CYAN, font_small, center=True)
+    # Signpost at southeast edge
+    sign_x = (off_x + f_cols) * TILE_SIZE
+    sign_y = (off_y + f_rows) * TILE_SIZE
+    sign_post = make_surface(TILE_SIZE, TILE_SIZE)
+    draw_box(sign_post, 14, 0, 4, 32, (90, 70, 50), True)
+    draw_box(sign_post, 15, 0, 2, 32, (110, 85, 65), True)
+    draw_box(sign_post, 4, 0, 24, 10, (70, 55, 40), True)
+    draw_box(sign_post, 5, 0, 22, 8, (90, 70, 50), True)
+    draw_box(sign_post, 6, 1, 20, 6, (110, 85, 65), True)
+    draw_text(sign_post, "EXPAND", 16, 3, GOLD, font_small, center=True)
+    screen.blit(sign_post, (sign_x, sign_y))
+
+    # Path exit
+    path_exit_x = off_x + f_cols + 1
+    path_exit_y = off_y + f_rows + 1
+    if path_exit_x < FARM_TILES_X and path_exit_y < FARM_TILES_Y:
+        ex, ey = path_exit_x * TILE_SIZE, path_exit_y * TILE_SIZE
+        screen.blit(get_tile_surf("path"), (ex, ey))
+        draw_text(screen, "SPACE PORT ->", ex + TILE_SIZE // 2, ey + TILE_SIZE // 2 - 8, CYAN, font_small, center=True)
 
     # Farm bots
     for bot in game.bots:
-        bx = (bot.array_x + FARM_TILES_OFFSET_X) * TILE_SIZE
-        by = (bot.array_y + FARM_TILES_OFFSET_Y) * TILE_SIZE
+        bx = (bot.array_x + off_x) * TILE_SIZE
+        by = (bot.array_y + off_y) * TILE_SIZE
         bot_surf = get_bot_surf(bot.bot_type)
         if not bot.active:
             dim = pygame.Surface((TILE_SIZE, TILE_SIZE))
@@ -618,6 +641,15 @@ def draw_farm():
             label += " (off)"
         draw_text(screen, label, bx + TILE_SIZE // 2, by - 8, label_color, font_small, center=True)
 
+    # Buildings on farm
+    for b in game.buildings:
+        bt = BUILDING_TYPES[b["type"]]
+        bs = get_building_surf(b["type"])
+        bw, bh = bt["size"]
+        screen.blit(bs, (b["tile_x"] * TILE_SIZE, b["tile_y"] * TILE_SIZE))
+        draw_text(screen, bt["name"], b["tile_x"] * TILE_SIZE + bw * TILE_SIZE // 2,
+                  b["tile_y"] * TILE_SIZE - 8, WHITE, font_small, center=True)
+
     # Facing tile highlight
     ftx, fty = game.player.get_facing_tile()
     if 0 <= ftx < FARM_TILES_X and 0 <= fty < FARM_TILES_Y:
@@ -626,17 +658,37 @@ def draw_farm():
         hl.fill((255, 255, 255))
         screen.blit(hl, (ftx * TILE_SIZE, fty * TILE_SIZE))
 
-    # Placement ghost
+    # Placement ghost (bots)
     if game.placement_mode and game.player.current_map == "farm":
         px = game.player.x // TILE_SIZE
         py = game.player.y // TILE_SIZE
-        ax = px - FARM_TILES_OFFSET_X
-        ay = py - FARM_TILES_OFFSET_Y
-        if 0 <= ax < TILLABLE_COLS and 0 <= ay < TILLABLE_ROWS:
+        ax = px - off_x
+        ay = py - off_y
+        if 0 <= ax < f_cols and 0 <= ay < f_rows:
             ghost = pygame.Surface((TILE_SIZE, TILE_SIZE))
             ghost.set_alpha(100)
             ghost.fill((0, 255, 0))
             screen.blit(ghost, (px * TILE_SIZE, py * TILE_SIZE))
+
+    # Placement ghost (buildings)
+    if game.build_mode and game.player.current_map == "farm":
+        px = game.player.x // TILE_SIZE
+        py = game.player.y // TILE_SIZE
+        bt = BUILDING_TYPES[game.build_mode]
+        bw, bh = bt["size"]
+        ghost = pygame.Surface((bw * TILE_SIZE, bh * TILE_SIZE))
+        ghost.set_alpha(80)
+        can_place = True
+        for b in game.buildings:
+            obw, obh = BUILDING_TYPES[b["type"]]["size"]
+            if px < b["tile_x"] + obw and px + bw > b["tile_x"] and py < b["tile_y"] + obh and py + bh > b["tile_y"]:
+                can_place = False
+                break
+        if off_x <= px < off_x + f_cols and off_y <= py < off_y + f_rows and can_place:
+            ghost.fill((0, 255, 0))
+        else:
+            ghost.fill((255, 0, 0))
+        screen.blit(ghost, (px * TILE_SIZE, py * TILE_SIZE))
 
     # Draw player
     player_surf = get_astronaut_surf(game.player.direction)
@@ -644,7 +696,7 @@ def draw_farm():
 
     # Tree decorations
     tree_positions = [(1, 4), (1, 7), (1, 10), (0, 15),
-                      (2 + TILLABLE_COLS + 2, 3), (2 + TILLABLE_COLS + 2, 8)]
+                      (off_x + f_cols + 2, 3), (off_x + f_cols + 2, 8)]
     for tx, ty in tree_positions:
         if tx < FARM_TILES_X and ty < FARM_TILES_Y:
             t_surf = make_surface(TILE_SIZE, TILE_SIZE * 2)
@@ -796,7 +848,7 @@ def draw_help():
     overlay.set_alpha(180)
     overlay.fill((0, 0, 20))
     screen.blit(overlay, (0, 0))
-    panel_w, panel_h = 580, 400
+    panel_w, panel_h = 640, 370
     px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
     pygame.draw.rect(screen, (10, 10, 30), (px, py, panel_w, panel_h))
     pygame.draw.rect(screen, (80, 100, 160), (px, py, panel_w, panel_h), 3)
@@ -818,24 +870,26 @@ def draw_help():
     right_sections = [
         ("MENUS", [
             ("I", "Inventory"),
-            ("K", "Skills & Progression"),
+            ("K", "Skills & Progress"),
             ("M", "Map"),
             ("S", "Save Game"),
             ("?", "Toggle Help"),
         ]),
         ("LOCATIONS", [
-            ("H (spaceport)", "Spaceship Hangar"),
-            ("B (spaceport)", "Bot Workshop"),
-            ("C (farm)", "Kitchen / Cook"),
+            ("H", "Hangar (spaceport)"),
+            ("B", "Bot Workshop (spaceport)"),
+            ("V", "Building Shop (spaceport)"),
+            ("C", "Kitchen (farm)"),
             ("E near bar", "Bar menu"),
-            ("G (spaceport)", "Gift mode"),
-            ("U / R (hangar)", "Upgrade / Refuel"),
+            ("G", "Gift mode (spaceport)"),
+            ("U / R", "Upgrade / Refuel (hangar)"),
+            ("E on signpost", "Expand farm"),
         ]),
     ]
 
-    col_l = px + 25
-    col_r = px + 310
-    key_w = 175
+    col_l = px + 20
+    col_r = px + 335
+    key_w = 120
     lh = 16
 
     def draw_section(col_x, sections, y_start):
@@ -850,15 +904,14 @@ def draw_help():
             y += 3
         return y
 
-    sy = py + 42
+    sy = py + 40
     draw_section(col_l, left_sections, sy)
     draw_section(col_r, right_sections, sy)
 
-    tips_y = py + panel_h - 52
+    tips_y = py + 265
     draw_text(screen, "-- TIPS --", col_l, tips_y, CYAN, font_small)
-    draw_text(screen, "E near landing pad: Enter festival (festival days)", col_l + 10, tips_y + 18, LIGHT_GRAY, font_small)
-    draw_text(screen, "ESC: Quit  |  Weather & seasons affect crop growth", col_l + 10, tips_y + 34, LIGHT_GRAY, font_small)
-    draw_text(screen, "Growth speed: Nebula > Bloom > Solar > Void", col_l + 10, tips_y + 50, LIGHT_GRAY, font_small)
+    draw_text(screen, "E near landing pad: Enter festival  |  ESC: Quit", col_l + 10, tips_y + 18, LIGHT_GRAY, font_small)
+    draw_text(screen, "Weather & seasons affect crop growth  |  Nebula > Bloom > Solar > Void", col_l + 10, tips_y + 34, LIGHT_GRAY, font_small)
 
 def draw_save_menu():
     if not game.save_menu_active:
@@ -1199,6 +1252,15 @@ def handle_events():
                     game.place_bot()
                     continue
 
+            if game.build_mode:
+                if event.key == pygame.K_ESCAPE:
+                    game.build_mode = None
+                    game.set_message("Building placement cancelled.")
+                    continue
+                elif event.key == pygame.K_e:
+                    game.place_building()
+                    continue
+
             if game.save_menu_active:
                 if event.key == pygame.K_ESCAPE:
                     game.save_menu_active = False
@@ -1229,6 +1291,39 @@ def handle_events():
                         if event.key == getattr(pygame, f"K_{i+1}"):
                             game.cook_recipe(available[i], qty)
                             game.cooking_active = False
+                continue
+
+            if game.expand_menu_active:
+                if event.key == pygame.K_ESCAPE:
+                    game.expand_menu_active = False
+                elif event.key == pygame.K_e:
+                    game.buy_expansion()
+                    game.expand_menu_active = False
+                continue
+
+            if game.building_shop_active:
+                if event.key == pygame.K_ESCAPE:
+                    game.building_shop_active = False
+                else:
+                    bk = list(BUILDING_TYPES.keys())
+                    for i, btype in enumerate(bk):
+                        if event.key == getattr(pygame, f"K_{i+1}"):
+                            game.buy_building(btype)
+                continue
+
+            if game.subscreen == "shipping_bin":
+                if event.key == pygame.K_ESCAPE:
+                    game.subscreen = None
+                else:
+                    for i, crop_key in enumerate(CROP_ORDER):
+                        if event.key == getattr(pygame, f"K_{i+1}"):
+                            count = game.player.inventory.get(crop_key, 0)
+                            if count > 0:
+                                qty = 1
+                                game.player.remove_item(crop_key, qty)
+                                game.shipping_bin_contents[crop_key] = game.shipping_bin_contents.get(crop_key, 0) + qty
+                                data = CROP_TYPES[crop_key]
+                                game.set_message(f"Added {data['name']} to shipping bin!")
                 continue
 
             if event.key == pygame.K_ESCAPE:
@@ -1285,12 +1380,15 @@ def handle_events():
                     py = game.player.y // TILE_SIZE
                     if 7 <= px <= 10 and 0 <= py <= 3:
                         game.sleep_prompt = True
+            elif event.key == pygame.K_v:
+                if game.player.current_map == "spaceport":
+                    game.building_shop_active = True
             elif event.key == pygame.K_s:
                 if not game.save_menu_active:
                     game.save_menu_active = True
 
     keys = pygame.key.get_pressed()
-    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.hangar_active and not game.planet_explore_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt and not game.bar_active and not game.festival_active and not game.save_menu_active and not game.skills_active:
+    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.hangar_active and not game.planet_explore_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt and not game.bar_active and not game.festival_active and not game.save_menu_active and not game.skills_active and not game.expand_menu_active and not game.building_shop_active and not game.subscreen == "shipping_bin":
         dx, dy = 0, 0
         if keys[pygame.K_w] or keys[pygame.K_UP]:
             dy = -1
@@ -1334,7 +1432,9 @@ def handle_events():
                 game.player.farm_y = game.player.y
                 px_t = game.player.x // TILE_SIZE
                 py_t = game.player.y // TILE_SIZE
-                if py_t >= 5 + TILLABLE_ROWS + 1 and px_t >= 2 + TILLABLE_COLS:
+                off_x = game.farm_off_x
+                off_y = game.farm_off_y
+                if py_t >= off_y + game.farm_rows + 1 and px_t >= off_x + game.farm_cols:
                     game.player.current_map = "spaceport"
                     game.player.x = 2 * TILE_SIZE
                     game.player.y = 16 * TILE_SIZE
@@ -1348,11 +1448,100 @@ def handle_events():
                 py_t = game.player.y // TILE_SIZE
                 if px_t >= 28 and py_t >= 18:
                     game.player.current_map = "farm"
-                    game.player.x = (2 + TILLABLE_COLS + 1) * TILE_SIZE
-                    game.player.y = (5 + TILLABLE_ROWS) * TILE_SIZE
+                    game.player.x = (game.farm_off_x + game.farm_cols + 1) * TILE_SIZE
+                    game.player.y = (game.farm_off_y + game.farm_rows) * TILE_SIZE
                     game.player.farm_x = game.player.x
                     game.player.farm_y = game.player.y
                     game.set_message("Back on the farm!")
+
+def draw_expand_menu():
+    if not game.expand_menu_active:
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 500, 320
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (20, 15, 30), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (120, 100, 80), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "~ Farm Expansion ~", px + panel_w // 2, py + 15, GOLD, font_large, center=True)
+    cur = game.farm_expansion_tier
+    draw_text(screen, f"Current Size: {game.farm_cols}x{game.farm_rows}", px + panel_w // 2, py + 45, WHITE, font_med, center=True)
+    if cur + 1 < len(FARM_EXPANSIONS):
+        nxt = FARM_EXPANSIONS[cur + 1]
+        can_afford = game.player.gold >= nxt["cost"]
+        color = GREEN if can_afford else RED
+        draw_text(screen, f"Next: {nxt['cols']}x{nxt['rows']}  Cost: {nxt['cost']}g", px + panel_w // 2, py + 70, color, font_med, center=True)
+        draw_text(screen, f"[E] Expand ({nxt['cost']}g)  |  [ESC] Cancel", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
+    else:
+        draw_text(screen, "★ MAX SIZE ★", px + panel_w // 2, py + 70, PINK, font_med, center=True)
+        draw_text(screen, "[ESC] Close", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
+    for i in range(cur + 1):
+        t = FARM_EXPANSIONS[i]
+        yy = py + 100 + i * 24
+        icon = "★" if i <= cur else "☆"
+        draw_text(screen, f"{icon} Tier {i}: {t['cols']}x{t['rows']} ({t['cost']}g)", px + 30, yy, GOLD if i <= cur else GRAY, font_small)
+
+def draw_building_shop():
+    if not game.building_shop_active:
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 550, 420
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (20, 20, 30), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (80, 120, 80), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "Construction Shop", px + panel_w // 2, py + 15, GOLD, font_large, center=True)
+    draw_text(screen, f"Gold: {game.player.gold}g", px + panel_w // 2, py + 42, GOLD, font_med, center=True)
+    bk = list(BUILDING_TYPES.keys())
+    for i, btype in enumerate(bk):
+        bt = BUILDING_TYPES[btype]
+        yy = py + 75 + i * 70
+        can_afford = game.player.gold >= bt["cost"]
+        bg = (40, 40, 50) if can_afford else (30, 20, 20)
+        pygame.draw.rect(screen, bg, (px + 20, yy, panel_w - 40, 60))
+        pygame.draw.rect(screen, (80, 100, 80), (px + 20, yy, panel_w - 40, 60), 1)
+        bsurf = get_building_surf(btype)
+        screen.blit(bsurf, (px + 28, yy + 4))
+        draw_text(screen, bt["name"], px + 70, yy + 6, WHITE if can_afford else GRAY, font_med)
+        draw_text(screen, bt["desc"], px + 70, yy + 28, LIGHT_GRAY, font_small)
+        draw_text(screen, f"[{i+1}] {bt['cost']}g", px + panel_w - 80, yy + 14, GOLD if can_afford else RED, font_med)
+    draw_text(screen, "1-4: Buy  |  ESC: Exit", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
+
+def draw_shipping_bin():
+    if game.subscreen != "shipping_bin":
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 500, 400
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (20, 20, 30), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (180, 100, 60), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "Shipping Bin", px + panel_w // 2, py + 15, GOLD, font_large, center=True)
+    total_items = sum(game.shipping_bin_contents.values()) if game.shipping_bin_contents else 0
+    draw_text(screen, f"Items to sell tonight: {total_items}", px + panel_w // 2, py + 45, WHITE, font_med, center=True)
+    y = py + 75
+    for item, count in sorted(game.shipping_bin_contents.items()):
+        data = CROP_TYPES.get(item)
+        if data:
+            draw_text(screen, f"{data['name']} x{count}  ({data['sell_price'] * count}g)", px + 40, y, WHITE, font_small)
+            y += 22
+    if not game.shipping_bin_contents:
+        draw_text(screen, "No items yet. Press I to transfer items from inventory.", px + panel_w // 2, py + 120, LIGHT_GRAY, font_small, center=True)
+    y = max(y + 20, py + 180)
+    draw_text(screen, "Items in inventory: press [1-6] to add to bin", px + panel_w // 2, y, CYAN, font_small, center=True)
+    for i, crop_key in enumerate(CROP_ORDER):
+        count = game.player.inventory.get(crop_key, 0)
+        if count > 0:
+            data = CROP_TYPES[crop_key]
+            sy = y + 20 + i * 22
+            draw_text(screen, f"[{i+1}] {data['name']} x{count} → add {data['sell_price']}g each", px + 40, sy, WHITE, font_small)
+    draw_text(screen, "ESC: Close", px + panel_w // 2, py + panel_h - 22, LIGHT_GRAY, font_small, center=True)
 
 def render():
     if game.player.current_map == "farm":
@@ -1399,6 +1588,12 @@ def render():
         draw_festival()
     if game.cooking_active:
         draw_cooking()
+    if game.expand_menu_active:
+        draw_expand_menu()
+    if game.building_shop_active:
+        draw_building_shop()
+    if game.subscreen == "shipping_bin":
+        draw_shipping_bin()
     if game.help_active:
         draw_help()
 
