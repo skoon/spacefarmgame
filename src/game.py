@@ -169,6 +169,9 @@ class NPC:
         elif self.location == "house4":
             self.base_tile_x, self.base_tile_y = 26, 17
             self.screen = "spaceport"
+        elif self.location == "pet_shop":
+            self.base_tile_x, self.base_tile_y = 22, 10
+            self.screen = "spaceport"
         else:
             self.base_tile_x, self.base_tile_y = 10, 10
             self.screen = "spaceport"
@@ -320,6 +323,11 @@ class GameState:
         self.shipping_bin_contents = {}
         self.expand_menu_active = False
         self.building_shop_active = False
+        # Animal Husbandry
+        self.animals = []
+        self.barn_capacity = 4
+        self.pet_shop_active = False
+        self.barn_overlay_active = False
 
     def add_particles(self, x, y, color, count=8):
         for _ in range(count):
@@ -496,6 +504,8 @@ class GameState:
                 tile.watered = False
                 if tile.soil_state == "watered":
                     tile.soil_state = "tilled"
+        self.feed_animals()
+        self.produce_animals()
         self.set_message(f"Day {self.day} - {TIME_NAMES[0]} ({SEASONS[self.season_index]}, {self.current_weather['name']})")
         self.process_shipping_bin()
         self.apply_buildings()
@@ -526,6 +536,8 @@ class GameState:
             "married_to": self.married_to,
             "bots": [{"type": b.bot_type, "x": b.array_x, "y": b.array_y, "active": b.active}
                      for b in self.bots],
+            "animals": self.animals,
+            "barn_capacity": self.barn_capacity,
             "ship_tier": self.ship_tier,
             "fuel": self.fuel,
             "season_index": self.season_index,
@@ -577,6 +589,8 @@ class GameState:
             self.tiles.append(row)
         self.buildings = data.get("buildings", [])
         self.shipping_bin_contents = data.get("shipping_bin_contents", {})
+        self.animals = data.get("animals", [])
+        self.barn_capacity = data.get("barn_capacity", 4)
         if "npc_hearts" in data:
             for nid, h in data["npc_hearts"].items():
                 for npc in self.npcs:
@@ -829,6 +843,42 @@ class GameState:
                         if tile.soil_state == "tilled" and not tile.watered:
                             tile.water()
 
+    def buy_animal(self, animal_id):
+        if len(self.animals) >= self.barn_capacity:
+            self.set_message("Your barn is full! Expand it first.")
+            return
+        at = ANIMAL_TYPES[animal_id]
+        if self.player.gold < at["cost"]:
+            self.set_message(f"Need {at['cost']}g!")
+            return
+        self.player.gold -= at["cost"]
+        self.animals.append({"type": animal_id, "days_since_produce": 0, "fed_today": False})
+        self.set_message(f"Bought {at['name']}!")
+
+    def feed_animals(self):
+        for a in self.animals:
+            at = ANIMAL_TYPES[a["type"]]
+            a["fed_today"] = False
+            can_feed = True
+            for feed_item, need in at["feed"].items():
+                if not self.player.has_item(feed_item, need):
+                    can_feed = False
+                    break
+            if can_feed:
+                for feed_item, need in at["feed"].items():
+                    self.player.remove_item(feed_item, need)
+                a["fed_today"] = True
+
+    def produce_animals(self):
+        for a in self.animals:
+            if a["fed_today"]:
+                a["days_since_produce"] += 1
+                at = ANIMAL_TYPES[a["type"]]
+                if a["days_since_produce"] >= at["produce_interval"]:
+                    product = at["produce"]
+                    self.player.add_item(product)
+                    a["days_since_produce"] = 0
+
     def refuel_ship(self):
         tier = SHIP_TIERS[self.ship_tier]
         max_fuel = tier["fuel_capacity"]
@@ -950,6 +1000,9 @@ class GameState:
                     elif b["type"] == "greenhouse":
                         self.set_message("Greenhouse: crops here ignore season penalties!")
                         return
+                    elif b["type"] == "barn":
+                        self.barn_overlay_active = True
+                        return
             # Signpost at southeast edge of tillable area
             sign_x = self.farm_off_x + self.farm_cols
             sign_y = self.farm_off_y + self.farm_rows
@@ -966,6 +1019,9 @@ class GameState:
                     if self.gift_mode:
                         if self.give_gift(npc):
                             return
+                    if npc.id == "zoop":
+                        self.pet_shop_active = True
+                        return
                     self.start_dialogue(npc)
                     return
             if 8 <= px <= 12 and 4 <= py <= 8:

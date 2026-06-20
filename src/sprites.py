@@ -415,6 +415,105 @@ def get_building_surf(building_type):
         draw_box(s, 3, 30, 26, 1, (100, 70, 45), True)
         draw_box(s, w - 2, 6, 1, 24, (90, 60, 40), True)
         draw_box(s, 1, 6, 1, 24, (90, 60, 40), True)
+    elif building_type == "barn":
+        draw_box(s, 0, 0, w, h, (110, 75, 45), True)
+        draw_box(s, 2, 2, w - 4, h - 4, (130, 90, 55), True)
+        draw_box(s, 4, 4, w - 8, h - 8, (150, 110, 70), True)
+        for plank_y in range(6, h - 6, 6):
+            hline(s, 4, plank_y, w - 8, (120, 85, 50))
+        draw_box(s, 0, 0, w, 4, (80, 55, 30), True)
+        draw_box(s, 1, 0, w - 2, 3, (100, 70, 40), True)
+        draw_box(s, 8, 4, 16, 20, (80, 60, 35), True)
+        draw_box(s, 9, 4, 14, 19, (100, 75, 45), True)
+        draw_box(s, 10, 4, 12, 18, (120, 90, 55), True)
+        dw, dh = w // 4, h // 2 - 8
+        for ddx in [4, w - 4 - dw]:
+            draw_box(s, ddx, h // 2 - 4, dw, dh, (70, 55, 35), True)
+            draw_box(s, ddx + 1, h // 2 - 3, dw - 2, dh - 2, (85, 70, 45), True)
+            draw_box(s, ddx + 2, h // 2 - 2, dw - 4, dh - 4, (100, 80, 55), True)
+            set_pixel(s, ddx + dw - 3, h // 2 + dh // 2, (180, 150, 70))
+        roof_peak = 6
+        for dy in range(roof_peak):
+            rw = w - (dy * 3)
+            rx = dy * 1
+            draw_box(s, rx, -roof_peak + dy, rw, 1, (65, 45, 25), True)
+            draw_box(s, rx, -roof_peak + dy + 1, rw, 1, (80, 55, 35), True)
+        draw_box(s, 0, h - 4, w, 4, (80, 55, 30), True)
+        draw_box(s, 1, h - 4, w - 2, 3, (100, 70, 40), True)
+    s.set_colorkey(BLACK)
+    SPRITE_CACHE[key] = s
+    return s
+
+def get_animal_surf(animal_type):
+    key = f"animal_{animal_type}"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
+    s = make_surface(32, 32)
+    if animal_type == "zap_chicken":
+        draw_box(s, 8, 16, 16, 12, (255, 220, 100), True)
+        draw_box(s, 9, 15, 14, 10, (255, 235, 140), True)
+        draw_box(s, 10, 14, 12, 8, (255, 245, 180), True)
+        set_pixel(s, 12, 12, (255, 200, 50))
+        set_pixel(s, 13, 12, (255, 200, 50))
+        set_pixel(s, 19, 12, (255, 200, 50))
+        set_pixel(s, 20, 12, (255, 200, 50))
+        draw_box(s, 11, 13, 10, 2, (255, 180, 60), True)
+        set_pixel(s, 22, 14, (255, 150, 50))
+        set_pixel(s, 23, 15, (255, 150, 50))
+        for i in range(3):
+            set_pixel(s, 5 + i * 2, 18 + i, (255, 220, 100))
+            set_pixel(s, 26 - i * 2, 18 + i, (255, 220, 100))
+        set_pixel(s, 14, 14, (80, 60, 40))
+        set_pixel(s, 17, 14, (80, 60, 40))
+        for sp in range(4):
+            sx = random.randint(6, 25)
+            sy = random.randint(10, 18)
+            set_pixel(s, sx, sy, (255, 255, 150))
+    elif animal_type == "moo_droid":
+        draw_box(s, 6, 14, 20, 14, (100, 200, 255), True)
+        draw_box(s, 7, 13, 18, 12, (130, 215, 255), True)
+        draw_box(s, 8, 12, 16, 10, (160, 230, 255), True)
+        draw_box(s, 6, 16, 20, 3, (80, 180, 230), True)
+        draw_box(s, 10, 10, 4, 4, (80, 180, 255), True)
+        draw_box(s, 18, 10, 4, 4, (80, 180, 255), True)
+        set_pixel(s, 12, 12, (60, 60, 80))
+        set_pixel(s, 13, 12, (60, 60, 80))
+        set_pixel(s, 20, 12, (60, 60, 80))
+        set_pixel(s, 21, 12, (60, 60, 80))
+        set_pixel(s, 16, 11, (60, 60, 80))
+        set_pixel(s, 6, 22, (80, 160, 200))
+        set_pixel(s, 7, 23, (80, 160, 200))
+        set_pixel(s, 25, 22, (80, 160, 200))
+        set_pixel(s, 24, 23, (80, 160, 200))
+        for i in range(3):
+            set_pixel(s, 10 + i, 26, (150, 200, 230))
+            set_pixel(s, 19 + i, 26, (150, 200, 230))
+        set_pixel(s, 9, 27, (60, 60, 60))
+        set_pixel(s, 22, 27, (60, 60, 60))
+        set_pixel(s, 14, 26, (200, 150, 80))
+        set_pixel(s, 15, 26, (200, 150, 80))
+    elif animal_type == "fluffalo":
+        draw_box(s, 4, 10, 24, 18, (255, 180, 255), True)
+        draw_box(s, 5, 9, 22, 16, (255, 200, 255), True)
+        draw_box(s, 6, 8, 20, 14, (255, 220, 255), True)
+        for fx in range(5, 27, 4):
+            for fy in range(8, 24, 3):
+                set_pixel(s, fx + random.randint(0, 2), fy, (255, 235, 255))
+        draw_box(s, 9, 10, 4, 4, (255, 200, 220), True)
+        draw_box(s, 19, 10, 4, 4, (255, 200, 220), True)
+        set_pixel(s, 11, 12, (80, 60, 100))
+        set_pixel(s, 12, 12, (80, 60, 100))
+        set_pixel(s, 21, 12, (80, 60, 100))
+        set_pixel(s, 22, 12, (80, 60, 100))
+        set_pixel(s, 16, 9, (180, 120, 180))
+        set_pixel(s, 16, 10, (180, 120, 180))
+        for i in range(4):
+            set_pixel(s, 6 + i, 6, (255, 200, 255))
+            set_pixel(s, 22 + i, 6, (255, 200, 255))
+        for i in range(3):
+            set_pixel(s, 8 + i * 6, 26, (220, 160, 220))
+            set_pixel(s, 9 + i * 6, 27, (220, 160, 220))
+            set_pixel(s, 10 + i * 6, 28, (220, 160, 220))
     s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s

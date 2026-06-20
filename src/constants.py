@@ -314,6 +314,40 @@ NPC_DEFS = [
             "gift_neutral": "Eh, it's alright. Not my thing but I appreciate the thought.",
         },
     },
+    {
+        "id": "zoop",
+        "name": "Zoop",
+        "color": (255, 150, 200),
+        "color2": (200, 100, 150),
+        "species": "Fuzzian",
+        "location": "pet_shop",
+        "schedule": [(0, 19, 10), (2, 14, 8), (4, 19, 10), (6, 21, 8)],
+        "romanceable": False,
+        "bio": "Runs the Exotic Pet Shop. Has the cutest alien critters in the galaxy!",
+        "likes": [],
+        "loves": [],
+        "dialogues": {
+            "intro": [
+                "Welcome to the Exotic Pet Shop! We've got the cutest critters in the cosmos!",
+                "Looking for a farm animal? I've got zap-chickens, moo-droids, and fluffalos!",
+                "Pets bring joy and profit! Take a look at my selection!",
+            ],
+            "neutral": [
+                "The zap-chickens are my favorites. They glow when they're happy!",
+                "A moo-droid never needs milking — it dispenses automatically!",
+                "Fluffalos are gentle giants. They'll follow you anywhere for a treat!",
+                "Each animal produces something valuable. Eggs, milk, wool — take your pick!",
+            ],
+            "friendly": [
+                "Your animals are thriving! I can tell you're a natural caretaker!",
+                "Best farmer on the planet! Your barn must be the envy of the galaxy!",
+                "I bred a new color variant of zap-chicken. Want to see?",
+            ],
+            "gift_like": "A treat for the animals! They'll love this!",
+            "gift_love": "Wow! The critters are going wild for this!",
+            "gift_neutral": "I'll take it. The animals might enjoy it.",
+        },
+    },
 ]
 
 TIME_NAMES = ["Dawn", "Morning", "Midday", "Afternoon", "Evening", "Sunset", "Dusk", "Night"]
@@ -360,6 +394,46 @@ BUILDING_TYPES = {
         "size": (1, 1),
         "desc": "Drop items to sell overnight",
         "color": (180, 100, 60),
+    },
+    "barn": {
+        "name": "Barn",
+        "cost": 3000,
+        "size": (4, 3),
+        "desc": "Houses up to 4 animals (expand later)",
+        "color": (140, 80, 40),
+    },
+}
+
+ANIMAL_TYPES = {
+    "zap_chicken": {
+        "name": "Zap-Chicken",
+        "cost": 500,
+        "produce": "Starlight Egg",
+        "produce_interval": 2,
+        "feed": {"glowroot": 1},
+        "sell_price": 300,
+        "color": (255, 220, 100),
+        "desc": "A tiny electric chicken from Nebula.",
+    },
+    "moo_droid": {
+        "name": "Moo-Droid",
+        "cost": 1200,
+        "produce": "Nebula Milk",
+        "produce_interval": 3,
+        "feed": {"cosmic_wheat": 2},
+        "sell_price": 600,
+        "color": (100, 200, 255),
+        "desc": "A robotic bovine from the outer rings.",
+    },
+    "fluffalo": {
+        "name": "Fluffalo",
+        "cost": 2500,
+        "produce": "Cosmic Wool",
+        "produce_interval": 4,
+        "feed": {"zargon_fruit": 1, "nebula_bloom": 1},
+        "sell_price": 1200,
+        "color": (255, 180, 255),
+        "desc": "A giant fluffy creature from Bloom.",
     },
 }
 
@@ -547,6 +621,20 @@ RECIPES = {
         "energy": 200,
         "sell_price": 500,
         "desc": "The ultimate cosmic dish",
+    },
+    "starlight_omelette": {
+        "name": "Starlight Omelette",
+        "ingredients": {"starlight_melon": 1, "starlight_egg": 2},
+        "energy": 120,
+        "sell_price": 250,
+        "desc": "A fluffy, glowing omelette",
+    },
+    "nebula_milkshake": {
+        "name": "Nebula Milkshake",
+        "ingredients": {"nebula_bloom": 1, "nebula_milk": 1},
+        "energy": 140,
+        "sell_price": 300,
+        "desc": "A creamy, cosmic milkshake",
     },
 }
 

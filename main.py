@@ -1,6 +1,7 @@
 import pygame
 import sys
 import random
+import math
 from src.constants import *
 from src.sprites import *
 from src.game import *
@@ -75,7 +76,7 @@ def draw_hud():
     if shed_count > 0:
         draw_text(screen, f"Storage Shed (+{shed_count * 24} slots)", 10, 80, CYAN, font_small)
 
-    if game.player.current_map == "farm" and not any([game.dialogue_active, game.shop_active, game.bot_shop_active, game.hangar_active, game.inventory_active, game.seed_select_active, game.sleep_prompt, game.bar_active, game.festival_active, game.save_menu_active, game.cooking_active, game.expand_menu_active, game.building_shop_active, game.subscreen == "shipping_bin", game.build_mode is not None]):
+    if game.player.current_map == "farm" and not any([game.dialogue_active, game.shop_active, game.bot_shop_active, game.hangar_active, game.inventory_active, game.seed_select_active, game.sleep_prompt, game.bar_active, game.festival_active, game.save_menu_active, game.cooking_active, game.expand_menu_active, game.building_shop_active, game.subscreen == "shipping_bin", game.build_mode is not None, game.pet_shop_active, game.barn_overlay_active]):
         ftx, fty = game.player.get_facing_tile()
         tile = game.get_tile_at(ftx, fty)
         if tile and tile.crop:
@@ -649,6 +650,14 @@ def draw_farm():
         screen.blit(bs, (b["tile_x"] * TILE_SIZE, b["tile_y"] * TILE_SIZE))
         draw_text(screen, bt["name"], b["tile_x"] * TILE_SIZE + bw * TILE_SIZE // 2,
                   b["tile_y"] * TILE_SIZE - 8, WHITE, font_small, center=True)
+        # Animals near barns
+        if b["type"] == "barn":
+            for i, a in enumerate(game.animals):
+                ax = b["tile_x"] * TILE_SIZE + 4 + (i % 2) * 16
+                ay = b["tile_y"] * TILE_SIZE + bh * TILE_SIZE - 12 + (i // 2) * 12
+                bob = int(math.sin(pygame.time.get_ticks() * 0.003 + i) * 2)
+                asurf = get_animal_surf(a["type"])
+                screen.blit(asurf, (ax, ay + bob))
 
     # Facing tile highlight
     ftx, fty = game.player.get_facing_tile()
@@ -881,6 +890,8 @@ def draw_help():
             ("V", "Building Shop (spaceport)"),
             ("C", "Kitchen (farm)"),
             ("E near bar", "Bar menu"),
+            ("E on Zoop", "Pet Shop (spaceport)"),
+            ("E on Barn", "Barn overlay (farm)"),
             ("G", "Gift mode (spaceport)"),
             ("U / R", "Upgrade / Refuel (hangar)"),
             ("E on signpost", "Expand farm"),
@@ -1311,6 +1322,21 @@ def handle_events():
                             game.buy_building(btype)
                 continue
 
+            if game.pet_shop_active:
+                if event.key == pygame.K_ESCAPE:
+                    game.pet_shop_active = False
+                else:
+                    ak = list(ANIMAL_TYPES.keys())
+                    for i, aid in enumerate(ak):
+                        if event.key == getattr(pygame, f"K_{i+1}"):
+                            game.buy_animal(aid)
+                continue
+
+            if game.barn_overlay_active:
+                if event.key == pygame.K_ESCAPE:
+                    game.barn_overlay_active = False
+                continue
+
             if game.subscreen == "shipping_bin":
                 if event.key == pygame.K_ESCAPE:
                     game.subscreen = None
@@ -1388,7 +1414,7 @@ def handle_events():
                     game.save_menu_active = True
 
     keys = pygame.key.get_pressed()
-    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.hangar_active and not game.planet_explore_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt and not game.bar_active and not game.festival_active and not game.save_menu_active and not game.skills_active and not game.expand_menu_active and not game.building_shop_active and not game.subscreen == "shipping_bin":
+    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.hangar_active and not game.planet_explore_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt and not game.bar_active and not game.festival_active and not game.save_menu_active and not game.skills_active and not game.expand_menu_active and not game.building_shop_active and not game.subscreen == "shipping_bin" and not game.pet_shop_active and not game.barn_overlay_active:
         dx, dy = 0, 0
         if keys[pygame.K_w] or keys[pygame.K_UP]:
             dy = -1
@@ -1543,6 +1569,74 @@ def draw_shipping_bin():
             draw_text(screen, f"[{i+1}] {data['name']} x{count} → add {data['sell_price']}g each", px + 40, sy, WHITE, font_small)
     draw_text(screen, "ESC: Close", px + panel_w // 2, py + panel_h - 22, LIGHT_GRAY, font_small, center=True)
 
+def draw_pet_shop():
+    if not game.pet_shop_active:
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 550, 420
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (30, 20, 40), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (200, 100, 180), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "~ Exotic Pet Shop ~", px + panel_w // 2, py + 15, PINK, font_large, center=True)
+    draw_text(screen, f"Gold: {game.player.gold}g  |  Barn: {len(game.animals)}/{game.barn_capacity}", px + panel_w // 2, py + 42, GOLD, font_med, center=True)
+    ak = list(ANIMAL_TYPES.keys())
+    for i, aid in enumerate(ak):
+        at = ANIMAL_TYPES[aid]
+        yy = py + 75 + i * 100
+        can_afford = game.player.gold >= at["cost"]
+        can_house = len(game.animals) < game.barn_capacity
+        can_buy = can_afford and can_house
+        bg = (40, 30, 50) if can_buy else (30, 20, 30)
+        pygame.draw.rect(screen, bg, (px + 20, yy, panel_w - 40, 88))
+        pygame.draw.rect(screen, (120, 80, 120), (px + 20, yy, panel_w - 40, 88), 1)
+        asurf = get_animal_surf(aid)
+        screen.blit(asurf, (px + 28, yy + 6))
+        draw_text(screen, at["name"], px + 70, yy + 6, WHITE if can_buy else GRAY, font_med)
+        draw_text(screen, at["desc"], px + 70, yy + 26, LIGHT_GRAY, font_small)
+        feed_str = ", ".join(f"{v}x {k}" for k, v in at["feed"].items())
+        draw_text(screen, f"Feed: {feed_str} | Produces: {at['produce']} every {at['produce_interval']} days", px + 70, yy + 44, CYAN, font_small)
+        draw_text(screen, f"[{i+1}] {at['cost']}g  |  Sell: {at['sell_price']}g", px + panel_w - 120, yy + 62, GOLD if can_afford else RED, font_med)
+        if not can_house:
+            draw_text(screen, "BARN FULL", px + panel_w - 120, yy + 62, RED, font_small)
+    draw_text(screen, "1-3: Buy Animal  |  ESC: Exit", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
+
+def draw_barn_overlay():
+    if not game.barn_overlay_active:
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 500, 400
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (20, 30, 20), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (140, 80, 40), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "~ Barn ~", px + panel_w // 2, py + 15, GOLD, font_large, center=True)
+    draw_text(screen, f"Animals: {len(game.animals)}/{game.barn_capacity}", px + panel_w // 2, py + 42, WHITE, font_med, center=True)
+    if not game.animals:
+        draw_text(screen, "No animals yet. Visit Zoop at the Space Port!", px + panel_w // 2, py + 120, LIGHT_GRAY, font_med, center=True)
+    else:
+        for i, a in enumerate(game.animals):
+            at = ANIMAL_TYPES[a["type"]]
+            yy = py + 75 + i * 55
+            bar_h = min(i, 5) * 55
+            if bar_h + 75 + 55 > panel_h - 30:
+                break
+            pygame.draw.rect(screen, (30, 40, 30), (px + 20, yy, panel_w - 40, 48))
+            pygame.draw.rect(screen, (80, 100, 60), (px + 20, yy, panel_w - 40, 48), 1)
+            asurf = get_animal_surf(a["type"])
+            screen.blit(asurf, (px + 28, yy + 4))
+            status = "Fed" if a["fed_today"] else "Hungry"
+            days_left = at["produce_interval"] - a["days_since_produce"]
+            prod_status = f"Next produce in {days_left}d" if days_left > 0 else "Ready!"
+            draw_text(screen, f"{at['name']}  |  {status}  |  {prod_status}", px + 70, yy + 8, WHITE, font_small)
+            feed_str = ", ".join(f"{v}x {k}" for k, v in at["feed"].items())
+            draw_text(screen, f"Feed: {feed_str}", px + 70, yy + 28, LIGHT_GRAY, font_small)
+    draw_text(screen, "ESC: Close", px + panel_w // 2, py + panel_h - 22, LIGHT_GRAY, font_small, center=True)
+
 def render():
     if game.player.current_map == "farm":
         draw_farm()
@@ -1594,6 +1688,10 @@ def render():
         draw_building_shop()
     if game.subscreen == "shipping_bin":
         draw_shipping_bin()
+    if game.pet_shop_active:
+        draw_pet_shop()
+    if game.barn_overlay_active:
+        draw_barn_overlay()
     if game.help_active:
         draw_help()
 
