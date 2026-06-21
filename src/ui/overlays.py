@@ -437,9 +437,9 @@ def draw_building_shop():
         pygame.draw.rect(screen, (80, 100, 80), (px + 20, yy, panel_w - 40, 60), 1)
         bsurf = get_building_surf(btype)
         screen.blit(bsurf, (px + 28, yy + 4))
-        draw_text(screen, bt["name"], px + 70, yy + 6, WHITE if can_afford else GRAY, font_med)
+        draw_text(screen, bt["name"], px + 70, yy + 6, WHITE if can_afford else GRAY, font_small)
         draw_text(screen, bt["desc"], px + 70, yy + 28, LIGHT_GRAY, font_small)
-        draw_text(screen, f"[{i+1}] {bt['cost']}g", px + panel_w - 80, yy + 14, GOLD if can_afford else RED, font_med)
+        draw_text(screen, f"[{i+1}] {bt['cost']}g", px + panel_w - 80, yy + 14, GOLD if can_afford else RED, font_small)
     draw_text(screen, "1-4: Buy  |  ESC: Exit", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
 
 def draw_shipping_bin():

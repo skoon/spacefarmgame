@@ -5,6 +5,7 @@ import random
 import math
 from src.constants import *
 from src.sprites import *
+from src.game.entities import FarmBot
 
 
 class FarmingMixin:
