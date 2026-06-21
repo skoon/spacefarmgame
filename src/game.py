@@ -798,8 +798,7 @@ class GameState:
     def place_building(self):
         if self.build_mode is None:
             return
-        px = self.player.x // TILE_SIZE
-        py = self.player.y // TILE_SIZE
+        px, py = self.player.get_facing_tile()
         bt = BUILDING_TYPES[self.build_mode]
         bw, bh = bt["size"]
         # Check if within tillable area
@@ -986,12 +985,13 @@ class GameState:
             if abs(px - 8) <= 1 and abs(py - 2) <= 1:
                 self.sleep_prompt = True
                 return
-            # Building interaction
+            # Building interaction (check facing tile)
+            ftx, fty = self.player.get_facing_tile()
             for b in self.buildings:
                 bt = BUILDING_TYPES[b["type"]]
                 bw, bh = bt["size"]
-                if b["tile_x"] <= px < b["tile_x"] + bw and b["tile_y"] <= py < b["tile_y"] + bh:
-                    if b["type"] == "shipping_bin" and self.player.get_facing_tile():
+                if b["tile_x"] <= ftx < b["tile_x"] + bw and b["tile_y"] <= fty < b["tile_y"] + bh:
+                    if b["type"] == "shipping_bin":
                         self.open_shipping_bin()
                         return
                     elif b["type"] == "storage_shed":

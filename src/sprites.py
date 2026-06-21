@@ -14,6 +14,14 @@ def set_pixel(surf, x, y, color):
     if 0 <= x < surf.get_width() and 0 <= y < surf.get_height():
         surf.set_at((x, y), color)
 
+def hline(surf, x, y, w, color):
+    for dx in range(w):
+        set_pixel(surf, x + dx, y, color)
+
+def vline(surf, x, y, h, color):
+    for dy in range(h):
+        set_pixel(surf, x, y + dy, color)
+
 def draw_box(surf, x, y, w, h, color, fill=True):
     if fill:
         for dy in range(h):

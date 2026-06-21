@@ -681,8 +681,8 @@ def draw_farm():
 
     # Placement ghost (buildings)
     if game.build_mode and game.player.current_map == "farm":
-        px = game.player.x // TILE_SIZE
-        py = game.player.y // TILE_SIZE
+        ftx, fty = game.player.get_facing_tile()
+        px, py = ftx, fty
         bt = BUILDING_TYPES[game.build_mode]
         bw, bh = bt["size"]
         ghost = pygame.Surface((bw * TILE_SIZE, bh * TILE_SIZE))
@@ -921,7 +921,7 @@ def draw_help():
 
     tips_y = py + 265
     draw_text(screen, "-- TIPS --", col_l, tips_y, CYAN, font_small)
-    draw_text(screen, "E near landing pad: Enter festival  |  ESC: Quit", col_l + 10, tips_y + 18, LIGHT_GRAY, font_small)
+    draw_text(screen, "E near landing pad: Enter festival  |  Ctrl+Q: Quit", col_l + 10, tips_y + 18, LIGHT_GRAY, font_small)
     draw_text(screen, "Weather & seasons affect crop growth  |  Nebula > Bloom > Solar > Void", col_l + 10, tips_y + 34, LIGHT_GRAY, font_small)
 
 def draw_save_menu():
@@ -955,7 +955,7 @@ def draw_save_menu():
         else:
             draw_text(screen, "Empty", px + 40, yy + 36, GRAY, font_small)
         draw_text(screen, f"[{i + 1}]", px + panel_w - 60, yy + 24, GOLD, font_med)
-    draw_text(screen, "1-3: Save to slot  |  L + 1-3: Load from slot  |  ESC: Close", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
+    draw_text(screen, "↑↓: Select  |  ENTER: Save  |  L+1-3: Load  |  ESC: Close", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
 
 def draw_skills():
     if not game.skills_active:
@@ -1280,6 +1280,13 @@ def handle_events():
                     game.save_game(slot)
                     game.save_menu_slot = slot
                     game.save_menu_active = False
+                elif event.key == pygame.K_RETURN:
+                    game.save_game(game.save_menu_slot)
+                    game.save_menu_active = False
+                elif event.key == pygame.K_UP:
+                    game.save_menu_slot = max(0, game.save_menu_slot - 1)
+                elif event.key == pygame.K_DOWN:
+                    game.save_menu_slot = min(SAVE_SLOT_COUNT - 1, game.save_menu_slot + 1)
                 elif event.key == pygame.K_l:
                     keys = pygame.key.get_pressed()
                     load_slot = None
@@ -1352,7 +1359,7 @@ def handle_events():
                                 game.set_message(f"Added {data['name']} to shipping bin!")
                 continue
 
-            if event.key == pygame.K_ESCAPE:
+            if event.key == pygame.K_q and pygame.key.get_mods() & pygame.KMOD_CTRL:
                 game.running = False
             elif event.key == pygame.K_e:
                 game.interact()
