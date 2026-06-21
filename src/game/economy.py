@@ -68,3 +68,14 @@ class EconomyMixin:
                 self.set_message(f"Sold {count}x {dish_name} for {price}g!")
         else:
             self.set_message("You don't have any to sell!")
+
+    def sell_fish(self, fish_id, count=1):
+        if self.player.has_item(fish_id, count):
+            price = FISH_TYPES[fish_id]["sell_price"] * count
+            if self.get_skill_level("exploration") >= 20:   # Lv20: +50% sell
+                price = int(price * 1.5)
+            self.player.remove_item(fish_id, count)
+            self.player.gold += price
+            self.set_message(f"Sold {count}x {FISH_TYPES[fish_id]['name']} for {price}g!")
+        else:
+            self.set_message("You don't have any to sell!")

@@ -15,9 +15,10 @@ from src.game.economy import EconomyMixin
 from src.game.social import SocialMixin
 from src.game.world_sim import WorldSimMixin
 from src.game.progression import ProgressionMixin
+from src.game.fishing import FishingMixin
 
 
-class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, KitchenMixin, EconomyMixin, SocialMixin, WorldSimMixin, ProgressionMixin):
+class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, KitchenMixin, EconomyMixin, SocialMixin, WorldSimMixin, ProgressionMixin, FishingMixin):
     def __init__(self):
         self.player = Player()
         self.day = 1
@@ -95,6 +96,16 @@ class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, Ki
         self.barn_capacity = 4
         self.pet_shop_active = False
         self.barn_overlay_active = False
+        # Fishing
+        self.fishing_active = False
+        self.fishing_state = "idle"
+        self.fishing_timer = 0
+        self.fishing_bite_window = 0
+        self.fishing_progress = 0.0
+        self.fishing_current_fish = None
+        self.fishing_caught_fish = None
+        self.fish_collection = {}
+        self.fish_caught_total = 0
 
     def set_message(self, msg):
         self.message = msg
@@ -196,6 +207,8 @@ class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, Ki
             "current_weather_idx": WEATHER_EVENTS.index(self.current_weather) if self.current_weather in WEATHER_EVENTS else 0,
             "skills": self.skills,
             "processing_queue": self.processing_queue,
+            "fish_collection": self.fish_collection,
+            "fish_caught_total": self.fish_caught_total,
         }
         path = f"savegame_{slot}.json"
         with open(path, "w") as f:
@@ -262,6 +275,8 @@ class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, Ki
         self.current_weather = WEATHER_EVENTS[weather_idx] if 0 <= weather_idx < len(WEATHER_EVENTS) else WEATHER_EVENTS[0]
         self.skills = data.get("skills", {"farming": 0, "exploration": 0, "cooking": 0, "social": 0})
         self.processing_queue = data.get("processing_queue", [])
+        self.fish_collection = data.get("fish_collection", {})
+        self.fish_caught_total = data.get("fish_caught_total", 0)
         return True
 
     def get_tile_at(self, tx, ty):
@@ -341,6 +356,9 @@ class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, Ki
                 return
             if self.festival_today and 12 <= px <= 17 and 16 <= py <= 19:
                 self.start_festival()
+                return
+            if 25 <= px <= 29 and 10 <= py <= 14:
+                self.start_fishing()
                 return
             for npc in self.npcs:
                 if npc.location in ["house1", "house2", "house3", "house4"]:

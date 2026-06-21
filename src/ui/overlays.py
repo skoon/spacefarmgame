@@ -94,6 +94,21 @@ def draw_shop():
             draw_text(screen, f"[{artisan_keys[ai]}]", px + panel_w - 50, yy, ORANGE, font_small)
         ai += 1
 
+    fish_y = artisan_y + 20 + ai * 22 + 10
+    draw_text(screen, "-- Fish --", px + col_w + col_w // 2, fish_y, CYAN, font_med, center=True)
+    fish_keys = ["7", "8", "9", "0", "A", "I"]
+    fi = 0
+    for fid in FISH_ORDER:
+        count = game.player.inventory.get(fid, 0)
+        if count <= 0:
+            continue
+        yy = fish_y + 20 + fi * 22
+        f = FISH_TYPES[fid]
+        draw_text(screen, f"{f['name']} x{count} - {f['sell_price']}g", px + col_w + 40, yy, WHITE, font_small)
+        if fi < len(fish_keys):
+            draw_text(screen, f"[{fish_keys[fi]}]", px + panel_w - 50, yy, ORANGE, font_small)
+        fi += 1
+
     draw_text(screen, "ESC: Exit Shop", px + panel_w // 2, py + panel_h - 30, LIGHT_GRAY, font_med, center=True)
 
 def draw_bar():
@@ -541,3 +556,78 @@ def draw_barn_overlay():
             feed_str = ", ".join(f"{v}x {k}" for k, v in at["feed"].items())
             draw_text(screen, f"Feed: {feed_str}", px + 70, yy + 28, LIGHT_GRAY, font_small)
     draw_text(screen, "ESC: Close", px + panel_w // 2, py + panel_h - 22, LIGHT_GRAY, font_small, center=True)
+
+def draw_fishing():
+    if not game.fishing_active:
+        return
+    # Animated water background
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.fill((10, 30, 60))
+    screen.blit(overlay, (0, 0))
+    t = pygame.time.get_ticks()
+    for wy in range(80, SCREEN_HEIGHT, 24):
+        shade = 40 + (wy // 24 % 2) * 15
+        pygame.draw.rect(screen, (10, shade, shade + 40), (0, wy, SCREEN_WIDTH, 12))
+    for i in range(0, SCREEN_WIDTH, 40):
+        wx = i + int(8 * math.sin((t / 400.0) + i))
+        draw_text(screen, "~", wx, 120 + int(10 * math.sin(t / 300.0 + i)), (60, 120, 160), font_small)
+
+    draw_text(screen, "~ Fishing Pier ~", SCREEN_WIDTH // 2, 30, CYAN, font_large, center=True)
+    state = game.fishing_state
+    cx = SCREEN_WIDTH // 2
+
+    if state in ("casting", "waiting", "hooked"):
+        bob = get_bobber_surf()
+        bob_y = 240 + int(6 * math.sin(t / 250.0))
+        if state == "hooked":
+            bob_y += random.randint(-4, 4)  # shake
+        screen.blit(bob, (cx - 6, bob_y))
+
+    if state == "casting":
+        draw_text(screen, "Press SPACE to cast your line", cx, 380, WHITE, font_med, center=True)
+    elif state == "waiting":
+        draw_text(screen, "Waiting for a bite...", cx, 380, LIGHT_GRAY, font_med, center=True)
+    elif state == "hooked":
+        draw_text(screen, "A BITE!  Press SPACE!", cx, 380, YELLOW, font_large, center=True)
+    elif state == "reeling":
+        draw_text(screen, "Tap SPACE to reel it in!", cx, 110, YELLOW, font_med, center=True)
+        # vertical progress bar on the right
+        bar_x, bar_y, bar_w, bar_h = SCREEN_WIDTH - 90, 150, 40, 320
+        pygame.draw.rect(screen, (30, 30, 50), (bar_x, bar_y, bar_w, bar_h))
+        fill_h = int(bar_h * max(0.0, min(1.0, game.fishing_progress)))
+        pygame.draw.rect(screen, GREEN, (bar_x, bar_y + bar_h - fill_h, bar_w, fill_h))
+        pygame.draw.rect(screen, WHITE, (bar_x, bar_y, bar_w, bar_h), 2)
+        # struggling fish silhouette
+        if game.fishing_current_fish:
+            fs = get_fish_surf(game.fishing_current_fish)
+            fy = 250 + int(30 * math.sin(t / 120.0))
+            screen.blit(pygame.transform.scale(fs, (64, 64)), (cx - 32, fy))
+    elif state == "caught":
+        fid = game.fishing_caught_fish
+        if fid:
+            f = FISH_TYPES[fid]
+            fs = get_fish_surf(fid)
+            screen.blit(pygame.transform.scale(fs, (96, 96)), (cx - 48, 200))
+            draw_text(screen, f["name"], cx, 320, f["color"], font_large, center=True)
+            draw_text(screen, game.message, cx, 356, WHITE, font_med, center=True)
+        draw_text(screen, "Press SPACE to continue", cx, 400, GOLD, font_med, center=True)
+
+    # Collection panel (bottom strip)
+    panel_y = SCREEN_HEIGHT - 80
+    pygame.draw.rect(screen, (8, 16, 32), (0, panel_y, SCREEN_WIDTH, 80))
+    pygame.draw.rect(screen, (60, 100, 140), (0, panel_y, SCREEN_WIDTH, 80), 2)
+    caught_n = sum(1 for v in game.fish_collection.values() if v)
+    draw_text(screen, f"Collection: {caught_n}/{len(FISH_TYPES)}  (total caught: {game.fish_caught_total})",
+              12, panel_y + 6, LIGHT_GRAY, font_small)
+    for i, fid in enumerate(FISH_ORDER):
+        slot_x = 16 + i * 64
+        have = game.fish_collection.get(fid, False)
+        fs = get_fish_surf(fid)
+        if have:
+            screen.blit(fs, (slot_x, panel_y + 30))
+        else:
+            sil = fs.copy()
+            sil.fill((40, 40, 50), special_flags=pygame.BLEND_RGBA_MULT)
+            screen.blit(sil, (slot_x, panel_y + 30))
+
+    draw_text(screen, "ESC: Leave the pier", SCREEN_WIDTH - 12, panel_y + 6, LIGHT_GRAY, font_small)

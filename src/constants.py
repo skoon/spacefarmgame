@@ -643,6 +643,20 @@ RECIPES = {
         "sell_price": 300,
         "desc": "A creamy, cosmic milkshake",
     },
+    "fish_tacos": {
+        "name": "Galaxy Fish Tacos",
+        "ingredients": {"nebula_trout": 1, "cosmic_wheat": 1},
+        "energy": 100,
+        "sell_price": 150,
+        "desc": "Tacos with a cosmic twist",
+    },
+    "sushi_platter": {
+        "name": "Nebula Sushi Platter",
+        "ingredients": {"solar_salmon": 1, "nebula_bloom": 1},
+        "energy": 160,
+        "sell_price": 300,
+        "desc": "Raw fish on seasoned cosmic rice",
+    },
 }
 
 # Artisan goods — profit-oriented processing. Ingredient keys must match
@@ -706,6 +720,69 @@ ARTISAN_RECIPES = {
         "desc": "Sharp cheese aged in nebula dust",
     },
 }
+
+# Fish caught at the spaceport pier. Stored in inventory under the fish id
+# (like crops) so they can be used as recipe ingredients. Empty season/
+# weather/time_slots lists mean "no restriction".
+FISH_TYPES = {
+    "nebula_trout": {
+        "name": "Nebula Trout",
+        "difficulty": 1,
+        "sell_price": 50,
+        "seasons": ["Nebula", "Void", "Bloom", "Solar"],
+        "weather": [],
+        "time_slots": [],
+        "color": (120, 180, 255),
+    },
+    "bloom_bass": {
+        "name": "Bloom Bass",
+        "difficulty": 1,
+        "sell_price": 60,
+        "seasons": ["Bloom"],
+        "weather": [],
+        "time_slots": [0, 1, 2, 3],
+        "color": (100, 220, 100),
+    },
+    "solar_salmon": {
+        "name": "Solar Salmon",
+        "difficulty": 2,
+        "sell_price": 120,
+        "seasons": ["Solar"],
+        "weather": [],
+        "time_slots": [4, 5, 6],
+        "color": (255, 180, 80),
+    },
+    "void_catfish": {
+        "name": "Void Catfish",
+        "difficulty": 2,
+        "sell_price": 100,
+        "seasons": ["Void"],
+        "weather": ["Void Fog"],
+        "time_slots": [6, 7],
+        "color": (80, 60, 120),
+    },
+    "starlight_sturgeon": {
+        "name": "Starlight Sturgeon",
+        "difficulty": 3,
+        "sell_price": 250,
+        "seasons": ["Nebula", "Bloom", "Solar"],
+        "weather": [],
+        "time_slots": [6, 7, 0, 1],
+        "color": (200, 220, 255),
+    },
+    "cosmic_koi": {
+        "name": "Cosmic Koi",
+        "difficulty": 4,
+        "sell_price": 500,
+        "seasons": ["Nebula"],
+        "weather": ["Meteor Shower"],
+        "time_slots": [2, 3],
+        "color": (255, 150, 200),
+    },
+}
+
+FISH_ORDER = ["nebula_trout", "bloom_bass", "solar_salmon", "void_catfish",
+              "starlight_sturgeon", "cosmic_koi"]
 
 BAR_ITEMS = [
     {"name": "Nebula Nectar", "price": 15, "energy": 20, "color": (180, 100, 255)},

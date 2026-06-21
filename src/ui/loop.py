@@ -64,6 +64,8 @@ def render():
         draw_pet_shop()
     if game.barn_overlay_active:
         draw_barn_overlay()
+    if game.fishing_active:
+        draw_fishing()
     if game.help_active:
         draw_help()
 
@@ -77,6 +79,7 @@ def main():
             npc.update_movement()
         game.update_particles()
         game.update_weather_particles()
+        game.update_fishing()
 
         if game.message_timer > 0:
             game.message_timer -= 1

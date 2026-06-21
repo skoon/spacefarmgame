@@ -226,6 +226,18 @@ def draw_spaceport():
             screen.blit(s, (pad_x, pad_y))
     draw_text(screen, "★ LANDING PAD ★", 15 * TILE_SIZE, 17 * TILE_SIZE, CYAN, font_small, center=True)
 
+    # Fishing pier (east edge, tiles 25-29 x 10-14)
+    t = pygame.time.get_ticks()
+    for wx in range(25, 30):
+        for wy in range(10, 15):
+            shade = 90 + ((wx + wy) % 2) * 20 + int(10 * math.sin(t / 400.0 + wx + wy))
+            water = make_surface(TILE_SIZE, TILE_SIZE, (20, 70, max(60, min(150, shade + 40))))
+            screen.blit(water, (wx * TILE_SIZE, wy * TILE_SIZE))
+    for wy in range(10, 15):  # wooden pier planks at the approach column
+        plank = make_surface(TILE_SIZE, TILE_SIZE, (110, 80, 50))
+        screen.blit(plank, (24 * TILE_SIZE, wy * TILE_SIZE))
+    draw_text(screen, "FISHING PIER", 27 * TILE_SIZE, 9 * TILE_SIZE + 8, CYAN, font_small, center=True)
+
     # Paths
     for px in range(8, 22):
         screen.blit(get_tile_surf("path"), (px * TILE_SIZE, 12 * TILE_SIZE))

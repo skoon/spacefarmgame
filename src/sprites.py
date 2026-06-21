@@ -643,3 +643,44 @@ def get_ship_surf(tier):
     s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s
+
+def get_fish_surf(fish_id):
+    key = f"fish_{fish_id}"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
+    from src.constants import FISH_TYPES
+    c = FISH_TYPES[fish_id]["color"]
+    dark = (c[0] // 2, c[1] // 2, c[2] // 2)
+    s = make_surface(TILE_SIZE, TILE_SIZE)
+    # body (oval-ish)
+    draw_box(s, 8, 12, 14, 8, c, True)
+    draw_box(s, 6, 14, 2, 4, c, True)
+    draw_box(s, 22, 13, 2, 6, c, True)
+    # belly shading
+    draw_box(s, 9, 17, 12, 2, dark, True)
+    # tail fin
+    draw_box(s, 24, 11, 4, 4, c, True)
+    draw_box(s, 24, 17, 4, 4, c, True)
+    set_pixel(s, 27, 15, dark)
+    set_pixel(s, 27, 16, dark)
+    # top fin
+    draw_box(s, 12, 9, 6, 3, dark, True)
+    # eye
+    set_pixel(s, 10, 14, WHITE)
+    set_pixel(s, 11, 14, BLACK)
+    s.set_colorkey(BLACK)
+    SPRITE_CACHE[key] = s
+    return s
+
+def get_bobber_surf():
+    key = "bobber"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
+    s = make_surface(12, 12)
+    draw_box(s, 3, 0, 6, 6, (220, 60, 60), True)   # red top
+    draw_box(s, 3, 6, 6, 5, (240, 240, 240), True)  # white bottom
+    hline(s, 3, 5, 6, (120, 30, 30))
+    set_pixel(s, 5, 2, WHITE)
+    s.set_colorkey(BLACK)
+    SPRITE_CACHE[key] = s
+    return s

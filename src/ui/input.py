@@ -131,6 +131,14 @@ def handle_shop_keydown(event):
         if ai < len(artisan_keys) and event.key == artisan_keys[ai]:
             game.sell_dish(recipe["name"], qty)
         ai += 1
+    fish_keys = [pygame.K_7, pygame.K_8, pygame.K_9, pygame.K_0, pygame.K_a, pygame.K_i]
+    fi = 0
+    for fid in FISH_ORDER:
+        if game.player.inventory.get(fid, 0) <= 0:
+            continue
+        if fi < len(fish_keys) and event.key == fish_keys[fi]:
+            game.sell_fish(fid, qty)
+        fi += 1
 
 
 def handle_bar_keydown(event):
@@ -286,6 +294,24 @@ def handle_barn_keydown(event):
         game.barn_overlay_active = False
 
 
+def handle_fishing_keydown(event):
+    if event.key == pygame.K_ESCAPE:
+        game.exit_fishing()
+        return
+    if event.key == pygame.K_SPACE:
+        st = game.fishing_state
+        if st == "casting":
+            game.cast_line()
+        elif st == "hooked":
+            game.hook_fish()
+        elif st == "reeling":
+            game.reel_press()
+        elif st == "caught":
+            game.fishing_caught_fish = None
+            game.fishing_state = "casting"
+            game.set_message("Cast again (SPACE) or leave (ESC).")
+
+
 def handle_shipping_bin_keydown(event):
     if event.key == pygame.K_ESCAPE:
         game.subscreen = None
@@ -353,6 +379,7 @@ def _modal_handlers_late():
         (game.building_shop_active, handle_building_shop_keydown),
         (game.pet_shop_active, handle_pet_shop_keydown),
         (game.barn_overlay_active, handle_barn_keydown),
+        (game.fishing_active, handle_fishing_keydown),
         (game.subscreen == "shipping_bin", handle_shipping_bin_keydown),
     ]
 
@@ -448,7 +475,7 @@ def _movement_blocked():
             or game.sleep_prompt or game.bar_active or game.festival_active or game.save_menu_active
             or game.skills_active or game.cooking_active or game.crafting_active or game.expand_menu_active
             or game.building_shop_active or game.subscreen == "shipping_bin" or game.pet_shop_active
-            or game.barn_overlay_active)
+            or game.barn_overlay_active or game.fishing_active)
 
 
 def handle_movement():
