@@ -10,6 +10,7 @@ pygame.init()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Space Farm Galaxy")
 clock = pygame.time.Clock()
+font_tiny = pygame.font.SysFont("monospace", 12)
 font_small = pygame.font.SysFont("monospace", 14)
 font_med = pygame.font.SysFont("monospace", 18)
 font_large = pygame.font.SysFont("monospace", 24)
@@ -872,7 +873,7 @@ def draw_help():
     overlay.set_alpha(180)
     overlay.fill((0, 0, 20))
     screen.blit(overlay, (0, 0))
-    panel_w, panel_h = 640, 370
+    panel_w, panel_h = 720, 440
     px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
     pygame.draw.rect(screen, (10, 10, 30), (px, py, panel_w, panel_h))
     pygame.draw.rect(screen, (80, 100, 160), (px, py, panel_w, panel_h), 3)
@@ -903,6 +904,7 @@ def draw_help():
             ("H", "Hangar (spaceport)"),
             ("B", "Bot Workshop (spaceport)"),
             ("V", "Building Shop (spaceport)"),
+            ("V", "Artisan Workshop (farm)"),
             ("C", "Kitchen (farm)"),
             ("E near bar", "Bar menu"),
             ("E on Zoop", "Pet Shop (spaceport)"),
@@ -914,30 +916,30 @@ def draw_help():
     ]
 
     col_l = px + 20
-    col_r = px + 335
-    key_w = 120
-    lh = 16
+    col_r = px + 380
+    key_w = 110
+    lh = 15
 
     def draw_section(col_x, sections, y_start):
         y = y_start
         for sname, items in sections:
-            draw_text(screen, f"-- {sname} --", col_x, y, CYAN, font_small)
-            y += 17
+            draw_text(screen, f"-- {sname} --", col_x, y, CYAN, font_tiny)
+            y += 16
             for key, desc in items:
-                draw_text(screen, key, col_x + 10, y, GOLD, font_small)
-                draw_text(screen, desc, col_x + 10 + key_w, y, WHITE, font_small)
+                draw_text(screen, key, col_x + 10, y, GOLD, font_tiny)
+                draw_text(screen, desc, col_x + 10 + key_w, y, WHITE, font_tiny)
                 y += lh
-            y += 3
+            y += 4
         return y
 
-    sy = py + 40
-    draw_section(col_l, left_sections, sy)
-    draw_section(col_r, right_sections, sy)
+    sy = py + 44
+    left_end = draw_section(col_l, left_sections, sy)
+    right_end = draw_section(col_r, right_sections, sy)
 
-    tips_y = py + 265
-    draw_text(screen, "-- TIPS --", col_l, tips_y, CYAN, font_small)
-    draw_text(screen, "E near landing pad: Enter festival  |  Ctrl+Q: Quit", col_l + 10, tips_y + 18, LIGHT_GRAY, font_small)
-    draw_text(screen, "Weather & seasons affect crop growth  |  Nebula > Bloom > Solar > Void", col_l + 10, tips_y + 34, LIGHT_GRAY, font_small)
+    tips_y = max(left_end, right_end) + 10
+    draw_text(screen, "-- TIPS --", col_l, tips_y, CYAN, font_tiny)
+    draw_text(screen, "E near landing pad: Enter festival  |  Ctrl+Q: Quit", col_l + 10, tips_y + 16, LIGHT_GRAY, font_tiny)
+    draw_text(screen, "Weather & seasons affect crop growth  |  Nebula > Bloom > Solar > Void", col_l + 10, tips_y + 30, LIGHT_GRAY, font_tiny)
 
 def draw_save_menu():
     if not game.save_menu_active:
