@@ -437,6 +437,13 @@ ANIMAL_TYPES = {
     },
 }
 
+# Base sell value of animal products (keyed by inventory display name).
+ANIMAL_PRODUCTS = {
+    "Starlight Egg": 75,
+    "Nebula Milk": 100,
+    "Cosmic Wool": 200,
+}
+
 BOT_TYPES = {
     "water_bot": {
         "name": "Water-Bot",
@@ -635,6 +642,68 @@ RECIPES = {
         "energy": 140,
         "sell_price": 300,
         "desc": "A creamy, cosmic milkshake",
+    },
+}
+
+# Artisan goods — profit-oriented processing. Ingredient keys must match
+# inventory keys: crops use their lowercase id (see CROP_ORDER); animal
+# products are stored under their display name ("Cosmic Wool", "Nebula Milk").
+ARTISAN_RECIPES = {
+    "glowroot_chips": {
+        "name": "Glowroot Chips",
+        "ingredients": {"glowroot": 2},
+        "sell_price": 100,
+        "processing_days": 0,
+        "desc": "Crunchy, savory chips",
+    },
+    "cosmic_flour": {
+        "name": "Cosmic Flour",
+        "ingredients": {"cosmic_wheat": 2},
+        "sell_price": 150,
+        "processing_days": 0,
+        "desc": "Fine, sparkling flour",
+    },
+    "zargon_wine": {
+        "name": "Zargon Wine",
+        "ingredients": {"zargon_fruit": 3},
+        "sell_price": 400,
+        "processing_days": 3,
+        "desc": "Aged purple wine",
+    },
+    "starlight_jam": {
+        "name": "Starlight Jam",
+        "ingredients": {"starlight_melon": 2},
+        "sell_price": 350,
+        "processing_days": 2,
+        "desc": "Sweet jam that glows",
+    },
+    "nebula_perfume": {
+        "name": "Nebula Perfume",
+        "ingredients": {"nebula_bloom": 3},
+        "sell_price": 600,
+        "processing_days": 2,
+        "desc": "Exquisite cosmic perfume",
+    },
+    "cosmic_wine": {
+        "name": "Cosmic Wine",
+        "ingredients": {"cosmic_wheat": 3, "zargon_fruit": 1},
+        "sell_price": 500,
+        "processing_days": 4,
+        "desc": "Wine aged among the stars",
+    },
+    "woolen_scarf": {
+        "name": "Woolen Scarf",
+        "ingredients": {"Cosmic Wool": 2},
+        "sell_price": 500,
+        "processing_days": 0,
+        "desc": "A warm scarf from cosmic wool",
+    },
+    "aged_cheese": {
+        "name": "Aged Nebula Cheese",
+        "ingredients": {"Nebula Milk": 3},
+        "sell_price": 450,
+        "processing_days": 3,
+        "desc": "Sharp cheese aged in nebula dust",
     },
 }
 

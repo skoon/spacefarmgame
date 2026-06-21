@@ -309,6 +309,8 @@ class GameState:
         self.save_menu_active = False
         self.save_menu_slot = 0
         self.cooking_active = False
+        self.crafting_active = False
+        self.processing_queue = []  # [{recipe_key, days_remaining, count}]
         self.skills = {"farming": 0, "exploration": 0, "cooking": 0, "social": 0}
         self.skills_active = False
 
@@ -506,6 +508,7 @@ class GameState:
                     tile.soil_state = "tilled"
         self.feed_animals()
         self.produce_animals()
+        self.process_crafting()
         self.set_message(f"Day {self.day} - {TIME_NAMES[0]} ({SEASONS[self.season_index]}, {self.current_weather['name']})")
         self.process_shipping_bin()
         self.apply_buildings()
@@ -545,6 +548,7 @@ class GameState:
             "weather_timer": self.weather_timer,
             "current_weather_idx": WEATHER_EVENTS.index(self.current_weather) if self.current_weather in WEATHER_EVENTS else 0,
             "skills": self.skills,
+            "processing_queue": self.processing_queue,
         }
         path = f"savegame_{slot}.json"
         with open(path, "w") as f:
@@ -610,6 +614,7 @@ class GameState:
         weather_idx = data.get("current_weather_idx", 0)
         self.current_weather = WEATHER_EVENTS[weather_idx] if 0 <= weather_idx < len(WEATHER_EVENTS) else WEATHER_EVENTS[0]
         self.skills = data.get("skills", {"farming": 0, "exploration": 0, "cooking": 0, "social": 0})
+        self.processing_queue = data.get("processing_queue", [])
         return True
 
     def reactivate_bot(self, bot):
@@ -1145,6 +1150,13 @@ class GameState:
                 self.player.remove_item(dish_name, count)
                 self.player.gold += price
                 self.set_message(f"Sold {count}x {dish_name} for {price}g!")
+                return
+            artisan = next((r for r in ARTISAN_RECIPES.values() if r["name"] == dish_name), None)
+            if artisan:
+                price = artisan["sell_price"] * count
+                self.player.remove_item(dish_name, count)
+                self.player.gold += price
+                self.set_message(f"Sold {count}x {dish_name} for {price}g!")
         else:
             self.set_message("You don't have any to sell!")
 
@@ -1167,6 +1179,41 @@ class GameState:
         self.cooking_active = False
         self.set_message(f"Cooked {count}x {dish_name}! +{energy_gain} energy!")
         self.add_skill_xp("cooking", 3 * count)
+
+    def start_crafting(self, recipe_key, count=1):
+        recipe = ARTISAN_RECIPES.get(recipe_key)
+        if not recipe:
+            return
+        for ing, need in recipe["ingredients"].items():
+            if self.player.inventory.get(ing, 0) < need * count:
+                self.set_message(f"Missing ingredients for {count}x {recipe['name']}!")
+                return
+        for ing, need in recipe["ingredients"].items():
+            self.player.remove_item(ing, need * count)
+        if recipe["processing_days"] == 0:
+            self.player.add_item(recipe["name"], count)
+            self.set_message(f"Crafted {count}x {recipe['name']}!")
+            self.add_skill_xp("farming", 2)
+        else:
+            self.processing_queue.append({
+                "recipe_key": recipe_key,
+                "days_remaining": recipe["processing_days"],
+                "count": count,
+            })
+            self.set_message(f"{recipe['name']} started! Ready in {recipe['processing_days']} days.")
+
+    def process_crafting(self):
+        finished = 0
+        for entry in self.processing_queue[:]:
+            entry["days_remaining"] -= 1
+            if entry["days_remaining"] <= 0:
+                recipe = ARTISAN_RECIPES.get(entry["recipe_key"])
+                if recipe:
+                    self.player.add_item(recipe["name"], entry["count"])
+                    finished += entry["count"]
+                self.processing_queue.remove(entry)
+        if finished > 0:
+            self.set_message(f"{finished} artisan good(s) finished processing!")
 
     def get_solid_rects(self):
         rects = []

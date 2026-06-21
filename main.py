@@ -76,7 +76,7 @@ def draw_hud():
     if shed_count > 0:
         draw_text(screen, f"Storage Shed (+{shed_count * 24} slots)", 10, 80, CYAN, font_small)
 
-    if game.player.current_map == "farm" and not any([game.dialogue_active, game.shop_active, game.bot_shop_active, game.hangar_active, game.inventory_active, game.seed_select_active, game.sleep_prompt, game.bar_active, game.festival_active, game.save_menu_active, game.cooking_active, game.expand_menu_active, game.building_shop_active, game.subscreen == "shipping_bin", game.build_mode is not None, game.pet_shop_active, game.barn_overlay_active]):
+    if game.player.current_map == "farm" and not any([game.dialogue_active, game.shop_active, game.bot_shop_active, game.hangar_active, game.inventory_active, game.seed_select_active, game.sleep_prompt, game.bar_active, game.festival_active, game.save_menu_active, game.cooking_active, game.crafting_active, game.expand_menu_active, game.building_shop_active, game.subscreen == "shipping_bin", game.build_mode is not None, game.pet_shop_active, game.barn_overlay_active]):
         ftx, fty = game.player.get_facing_tile()
         tile = game.get_tile_at(ftx, fty)
         if tile and tile.crop:
@@ -181,6 +181,21 @@ def draw_shop():
         if di < len(dish_keys):
             draw_text(screen, f"[{dish_keys[di]}]", px + panel_w - 50, yy, ORANGE, font_small)
         di += 1
+
+    artisan_y = dish_y + 20 + di * 22 + 10
+    draw_text(screen, "-- Artisan Goods --", px + col_w + col_w // 2, artisan_y, GOLD, font_med, center=True)
+    artisan_keys = ["F", "G", "H", "J", "K", "L", "U", "O"]
+    ai = 0
+    for rk, recipe in ARTISAN_RECIPES.items():
+        name = recipe["name"]
+        count = game.player.inventory.get(name, 0)
+        if count <= 0:
+            continue
+        yy = artisan_y + 20 + ai * 22
+        draw_text(screen, f"{name} x{count} - {recipe['sell_price']}g", px + col_w + 40, yy, WHITE, font_small)
+        if ai < len(artisan_keys):
+            draw_text(screen, f"[{artisan_keys[ai]}]", px + panel_w - 50, yy, ORANGE, font_small)
+        ai += 1
 
     draw_text(screen, "ESC: Exit Shop", px + panel_w // 2, py + panel_h - 30, LIGHT_GRAY, font_med, center=True)
 
@@ -1030,6 +1045,64 @@ def draw_cooking():
         draw_text(screen, "No recipes available — harvest some crops first!", px + panel_w // 2, py + 150, LIGHT_GRAY, font_med, center=True)
     draw_text(screen, "1-8: Cook  |  ESC: Exit", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
 
+def draw_crafting():
+    if not game.crafting_active:
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 600, 500
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (30, 20, 30), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (200, 160, 80), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "~ Artisan Workshop ~", px + panel_w // 2, py + 15, GOLD, font_large, center=True)
+
+    recipe_keys = list(ARTISAN_RECIPES.keys())
+    for i, rk in enumerate(recipe_keys):
+        recipe = ARTISAN_RECIPES[rk]
+        can_craft = all(game.player.inventory.get(ing, 0) >= need for ing, need in recipe["ingredients"].items())
+        yy = py + 55 + i * 42
+        row_color = (45, 35, 25) if can_craft else (30, 28, 28)
+        pygame.draw.rect(screen, row_color, (px + 15, yy, panel_w - 30, 38))
+        pygame.draw.rect(screen, (90, 70, 40), (px + 15, yy, panel_w - 30, 38), 1)
+        name_color = WHITE if can_craft else LIGHT_GRAY
+        draw_text(screen, recipe["name"], px + 30, yy + 3, name_color, font_med)
+        ings = ", ".join(f"{game.player.inventory.get(k, 0)}/{v} {k}" for k, v in recipe["ingredients"].items())
+        draw_text(screen, ings, px + 30, yy + 21, LIGHT_GRAY, font_small)
+        # Profit analysis: output price vs. sum of ingredient base sell prices
+        in_val = 0
+        for ing, need in recipe["ingredients"].items():
+            in_val += _ingredient_value(ing) * need
+        profit = recipe["sell_price"] - in_val
+        time_txt = "Instant" if recipe["processing_days"] == 0 else f"{recipe['processing_days']}d"
+        draw_text(screen, f"{recipe['sell_price']}g ({time_txt})  +{profit}g", px + 320, yy + 3, GOLD, font_small)
+        draw_text(screen, f"profit", px + 320, yy + 21, (120, 200, 120) if profit >= 0 else ORANGE, font_small)
+        if can_craft:
+            draw_text(screen, f"[{i+1}]", px + panel_w - 50, yy + 10, GOLD, font_med)
+
+    # Processing queue
+    qy = py + 55 + len(recipe_keys) * 42 + 10
+    draw_text(screen, "-- Processing Queue --", px + panel_w // 2, qy, CYAN, font_med, center=True)
+    if not game.processing_queue:
+        draw_text(screen, "(empty)", px + panel_w // 2, qy + 22, LIGHT_GRAY, font_small, center=True)
+    else:
+        for j, entry in enumerate(game.processing_queue):
+            recipe = ARTISAN_RECIPES.get(entry["recipe_key"], {})
+            label = f"{entry['count']}x {recipe.get('name', '?')} - {entry['days_remaining']}d left"
+            draw_text(screen, label, px + panel_w // 2, qy + 22 + j * 18, WHITE, font_small, center=True)
+
+    draw_text(screen, "1-8: Craft (Shift=10)  |  ESC: Exit", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
+
+def _ingredient_value(item_key):
+    """Base sell value of a crafting ingredient (crop, dish, or animal product)."""
+    if item_key in CROP_TYPES:
+        return CROP_TYPES[item_key]["sell_price"]
+    recipe = next((r for r in RECIPES.values() if r["name"] == item_key), None)
+    if recipe:
+        return recipe["sell_price"]
+    return ANIMAL_PRODUCTS.get(item_key, 0)
+
 def draw_sleep_prompt():
     if not game.sleep_prompt:
         return
@@ -1182,6 +1255,14 @@ def handle_events():
                     if di < len(dish_keys) and event.key == dish_keys[di]:
                         game.sell_dish(recipe["name"], qty)
                     di += 1
+                artisan_keys = [pygame.K_f, pygame.K_g, pygame.K_h, pygame.K_j, pygame.K_k, pygame.K_l, pygame.K_u, pygame.K_o]
+                ai = 0
+                for rk, recipe in ARTISAN_RECIPES.items():
+                    if game.player.inventory.get(recipe["name"], 0) <= 0:
+                        continue
+                    if ai < len(artisan_keys) and event.key == artisan_keys[ai]:
+                        game.sell_dish(recipe["name"], qty)
+                    ai += 1
                 continue
 
             if game.bar_active:
@@ -1311,6 +1392,17 @@ def handle_events():
                             game.cooking_active = False
                 continue
 
+            if game.crafting_active:
+                if event.key == pygame.K_ESCAPE:
+                    game.crafting_active = False
+                else:
+                    qty = 10 if pygame.key.get_mods() & pygame.KMOD_SHIFT else 1
+                    recipe_keys = list(ARTISAN_RECIPES.keys())
+                    for i, rk in enumerate(recipe_keys):
+                        if event.key == getattr(pygame, f"K_{i+1}", None):
+                            game.start_crafting(rk, qty)
+                continue
+
             if game.expand_menu_active:
                 if event.key == pygame.K_ESCAPE:
                     game.expand_menu_active = False
@@ -1416,12 +1508,14 @@ def handle_events():
             elif event.key == pygame.K_v:
                 if game.player.current_map == "spaceport":
                     game.building_shop_active = True
+                elif game.player.current_map == "farm":
+                    game.crafting_active = True
             elif event.key == pygame.K_s:
                 if not game.save_menu_active:
                     game.save_menu_active = True
 
     keys = pygame.key.get_pressed()
-    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.hangar_active and not game.planet_explore_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt and not game.bar_active and not game.festival_active and not game.save_menu_active and not game.skills_active and not game.expand_menu_active and not game.building_shop_active and not game.subscreen == "shipping_bin" and not game.pet_shop_active and not game.barn_overlay_active:
+    if not game.dialogue_active and not game.shop_active and not game.bot_shop_active and not game.hangar_active and not game.planet_explore_active and not game.seed_select_active and not game.inventory_active and not game.sleep_prompt and not game.bar_active and not game.festival_active and not game.save_menu_active and not game.skills_active and not game.cooking_active and not game.crafting_active and not game.expand_menu_active and not game.building_shop_active and not game.subscreen == "shipping_bin" and not game.pet_shop_active and not game.barn_overlay_active:
         dx, dy = 0, 0
         if keys[pygame.K_w] or keys[pygame.K_UP]:
             dy = -1
@@ -1689,6 +1783,8 @@ def render():
         draw_festival()
     if game.cooking_active:
         draw_cooking()
+    if game.crafting_active:
+        draw_crafting()
     if game.expand_menu_active:
         draw_expand_menu()
     if game.building_shop_active:
