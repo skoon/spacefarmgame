@@ -32,6 +32,8 @@ class EconomyMixin:
     def buy_item(self, crop_key, count=1):
         data = CROP_TYPES[crop_key]
         cost = data["seed_price"] * count
+        if self.get_rank() >= 1:   # Resident rank perk: 10% seed discount
+            cost = int(cost * 0.9)
         if self.player.gold >= cost:
             self.player.gold -= cost
             seed_name = data["seed_name"]
@@ -45,6 +47,7 @@ class EconomyMixin:
             price = CROP_TYPES[crop_key]["sell_price"] * count
             self.player.remove_item(crop_key, count)
             self.player.gold += price
+            self.add_reputation(price // 100)
             self.set_message(f"Sold {count}x {CROP_TYPES[crop_key]['name']} for {price}g!")
         else:
             self.set_message("You don't have any to sell!")
@@ -58,6 +61,7 @@ class EconomyMixin:
                     price = int(price * 1.25)
                 self.player.remove_item(dish_name, count)
                 self.player.gold += price
+                self.add_reputation(price // 100)
                 self.set_message(f"Sold {count}x {dish_name} for {price}g!")
                 return
             artisan = next((r for r in ARTISAN_RECIPES.values() if r["name"] == dish_name), None)
@@ -65,6 +69,7 @@ class EconomyMixin:
                 price = artisan["sell_price"] * count
                 self.player.remove_item(dish_name, count)
                 self.player.gold += price
+                self.add_reputation(price // 100)
                 self.set_message(f"Sold {count}x {dish_name} for {price}g!")
         else:
             self.set_message("You don't have any to sell!")
@@ -76,6 +81,7 @@ class EconomyMixin:
                 price = int(price * 1.5)
             self.player.remove_item(fish_id, count)
             self.player.gold += price
+            self.add_reputation(price // 100)
             self.set_message(f"Sold {count}x {FISH_TYPES[fish_id]['name']} for {price}g!")
         else:
             self.set_message("You don't have any to sell!")

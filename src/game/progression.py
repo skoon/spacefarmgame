@@ -77,11 +77,15 @@ class ProgressionMixin:
     def end_festival(self, won=False):
         fest = FESTIVALS[self.festival_today] if self.festival_today else None
         if won and fest:
+            reward_gold = fest["reward_gold"]
+            if self.get_rank() >= 4:   # Hero rank perk: festival gold doubled
+                reward_gold *= 2
             self.player.add_item(fest["reward_item"])
-            self.player.gold += fest["reward_gold"]
+            self.player.gold += reward_gold
             for npc in self.npcs:
                 npc.heart_level = min(10, npc.heart_level + 1)
-            self.set_message(f"You won the {fest['name']}! +{fest['reward_gold']}g, {fest['reward_item']}, +1♥ all NPCs!")
+            self.add_reputation(25)
+            self.set_message(f"You won the {fest['name']}! +{reward_gold}g, {fest['reward_item']}, +1♥ all NPCs!")
             self.add_particles(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, GOLD, 30)
             self.add_particles(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, PINK, 30)
         elif fest:

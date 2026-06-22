@@ -66,6 +66,10 @@ def render():
         draw_barn_overlay()
     if game.fishing_active:
         draw_fishing()
+    if game.quest_board_active:
+        draw_quest_board()
+    if game.merchant_shop_active:
+        draw_merchant_shop()
     if game.help_active:
         draw_help()
 

@@ -16,9 +16,10 @@ from src.game.social import SocialMixin
 from src.game.world_sim import WorldSimMixin
 from src.game.progression import ProgressionMixin
 from src.game.fishing import FishingMixin
+from src.game.reputation import ReputationMixin
 
 
-class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, KitchenMixin, EconomyMixin, SocialMixin, WorldSimMixin, ProgressionMixin, FishingMixin):
+class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, KitchenMixin, EconomyMixin, SocialMixin, WorldSimMixin, ProgressionMixin, FishingMixin, ReputationMixin):
     def __init__(self):
         self.player = Player()
         self.day = 1
@@ -106,6 +107,15 @@ class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, Ki
         self.fishing_caught_fish = None
         self.fish_collection = {}
         self.fish_caught_total = 0
+        # Town Reputation & Daily Quests
+        self.reputation = 0
+        self.active_quests = []
+        self.completed_quests = 0
+        self.quest_board_active = False
+        self.merchant_present = False
+        self.merchant_shop_active = False
+        self.merchant_items = []
+        self.merchant_last_visit = -1
 
     def set_message(self, msg):
         self.message = msg
@@ -171,6 +181,8 @@ class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, Ki
         self.process_shipping_bin()
         self.apply_buildings()
         self.run_bots()
+        self.generate_daily_quests()
+        self.update_merchant()
 
     def save_game(self, slot=0):
         data = {
@@ -209,6 +221,12 @@ class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, Ki
             "processing_queue": self.processing_queue,
             "fish_collection": self.fish_collection,
             "fish_caught_total": self.fish_caught_total,
+            "reputation": self.reputation,
+            "completed_quests": self.completed_quests,
+            "active_quests": self.active_quests,
+            "merchant_present": self.merchant_present,
+            "merchant_items": self.merchant_items,
+            "merchant_last_visit": self.merchant_last_visit,
         }
         path = f"savegame_{slot}.json"
         with open(path, "w") as f:
@@ -277,6 +295,12 @@ class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, Ki
         self.processing_queue = data.get("processing_queue", [])
         self.fish_collection = data.get("fish_collection", {})
         self.fish_caught_total = data.get("fish_caught_total", 0)
+        self.reputation = data.get("reputation", 0)
+        self.completed_quests = data.get("completed_quests", 0)
+        self.active_quests = data.get("active_quests", [])
+        self.merchant_present = data.get("merchant_present", False)
+        self.merchant_items = data.get("merchant_items", [])
+        self.merchant_last_visit = data.get("merchant_last_visit", -1)
         return True
 
     def get_tile_at(self, tx, ty):
@@ -341,8 +365,19 @@ class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, Ki
                     if npc.id == "zoop":
                         self.pet_shop_active = True
                         return
+                    if self.try_complete_delivery(npc):
+                        return
                     self.start_dialogue(npc)
                     return
+            if self.get_rank() >= 5 and abs(px - 3) <= 1 and abs(py - 3) <= 1:
+                self.visit_observatory()
+                return
+            if abs(px - 6) <= 1 and abs(py - 10) <= 1:
+                self.quest_board_active = True
+                return
+            if self.merchant_present and abs(px - 5) <= 1 and abs(py - 8) <= 1:
+                self.merchant_shop_active = True
+                return
             if 8 <= px <= 12 and 4 <= py <= 8:
                 self.start_shop()
                 return
@@ -357,7 +392,7 @@ class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, Ki
             if self.festival_today and 12 <= px <= 17 and 16 <= py <= 19:
                 self.start_festival()
                 return
-            if 25 <= px <= 29 and 10 <= py <= 14:
+            if 25 <= px <= 29 and 8 <= py <= 12:
                 self.start_fishing()
                 return
             for npc in self.npcs:
@@ -367,6 +402,8 @@ class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, Ki
                         if self.gift_mode:
                             if self.give_gift(npc):
                                 return
+                        if self.try_complete_delivery(npc):
+                            return
                         self.start_dialogue(npc)
                         return
 
@@ -389,7 +426,7 @@ class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, Ki
         else:
             rects.append(pygame.Rect(8 * ts, 2 * ts, 3 * ts, 3 * ts))
             rects.append(pygame.Rect(15 * ts, 2 * ts, 3 * ts, 3 * ts))
-            for hx, hy in [(5, 14), (12, 14), (19, 14), (25, 14)]:
+            for hx, hy in [(5, 14), (9, 14), (19, 14), (25, 14)]:
                 rects.append(pygame.Rect(hx * ts, hy * ts, 3 * ts, 3 * ts))
             for npc in self.npcs:
                 rects.append(pygame.Rect(npc.tile_x * ts + 3 + int(npc.pixel_offset_x), npc.tile_y * ts - 13 + int(npc.pixel_offset_y), 26, 26))

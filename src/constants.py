@@ -469,6 +469,25 @@ BOT_TYPES = {
         "upkeep": 10,
         "color": (255, 200, 100),
     },
+    # Rank 3 ("Benefactor") town perk unlocks these upgraded bots in the shop.
+    "mega_water_bot": {
+        "name": "Mega-Water-Bot",
+        "action": "water",
+        "range": 4,
+        "cost": 1500,
+        "upkeep": 8,
+        "color": (120, 220, 255),
+        "rank_req": 3,
+    },
+    "mega_harvest_bot": {
+        "name": "Mega-Harvest-Bot",
+        "action": "harvest",
+        "range": 4,
+        "cost": 3000,
+        "upkeep": 18,
+        "color": (255, 230, 140),
+        "rank_req": 3,
+    },
 }
 
 SHIP_TIERS = [
@@ -789,4 +808,34 @@ BAR_ITEMS = [
     {"name": "Glow-Ale",      "price": 10, "energy": 10, "color": (100, 220, 100)},
     {"name": "Cosmic Coffee", "price": 20, "energy": 30, "color": (80, 60, 30)},
     {"name": "Alien Snacks",  "price": 8,  "energy": 5,  "color": (255, 200, 80)},
+]
+
+# --- Milestone 14: Town Reputation & Daily Quests ---
+
+TOWN_RANKS = [
+    {"level": 0, "name": "Visitor",    "rep_needed": 0,    "perk": "No perks"},
+    {"level": 1, "name": "Resident",   "rep_needed": 50,   "perk": "10% discount on seeds at the shop"},
+    {"level": 2, "name": "Citizen",    "rep_needed": 150,  "perk": "Traveling Merchant visits the port"},
+    {"level": 3, "name": "Benefactor", "rep_needed": 300,  "perk": "Upgraded Mega-Bots in the Bot Workshop"},
+    {"level": 4, "name": "Hero",       "rep_needed": 500,  "perk": "Festival gold rewards doubled"},
+    {"level": 5, "name": "Legend",     "rep_needed": 1000, "perk": "Unlock the Spaceport Observatory"},
+]
+
+# Daily quest templates. count is rolled in [min_count, max_count];
+# reward gold is rolled in the gold tuple; rep is fixed.
+QUEST_TEMPLATES = [
+    {"id": "deliver", "name": "Delivery", "min_count": 1, "max_count": 5,  "gold": (50, 200),  "rep": 15},
+    {"id": "harvest", "name": "Harvest",  "min_count": 5, "max_count": 15, "gold": (100, 400), "rep": 20},
+    {"id": "fish",    "name": "Fishing",  "min_count": 1, "max_count": 4,  "gold": (80, 300),  "rep": 25},
+    {"id": "cook",    "name": "Cooking",  "min_count": 1, "max_count": 4,  "gold": (100, 350), "rep": 20},
+]
+
+# Traveling Merchant (Cosmo) — visits every MERCHANT_INTERVAL days once at rank >= 2.
+MERCHANT_INTERVAL = 7
+MERCHANT_POOL = [
+    {"name": "Ancient Seed",         "price": 2000, "desc": "Grows into something unknown..."},
+    {"name": "Nebula Crystal",       "price": 500,  "desc": "A pretty decorative crystal"},
+    {"name": "Lucky Charm",          "price": 1000, "desc": "A charm said to bring fortune"},
+    {"name": "Golden Bait",          "price": 300,  "desc": "Rare fish love this"},
+    {"name": "Cosmic Coffee Machine","price": 5000, "desc": "Brews free cosmic coffee daily"},
 ]

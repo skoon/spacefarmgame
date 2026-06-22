@@ -226,17 +226,17 @@ def draw_spaceport():
             screen.blit(s, (pad_x, pad_y))
     draw_text(screen, "★ LANDING PAD ★", 15 * TILE_SIZE, 17 * TILE_SIZE, CYAN, font_small, center=True)
 
-    # Fishing pier (east edge, tiles 25-29 x 10-14)
+    # Fishing pier (east edge, tiles 25-29 x 8-12)
     t = pygame.time.get_ticks()
     for wx in range(25, 30):
-        for wy in range(10, 15):
+        for wy in range(8, 13):
             shade = 90 + ((wx + wy) % 2) * 20 + int(10 * math.sin(t / 400.0 + wx + wy))
             water = make_surface(TILE_SIZE, TILE_SIZE, (20, 70, max(60, min(150, shade + 40))))
             screen.blit(water, (wx * TILE_SIZE, wy * TILE_SIZE))
-    for wy in range(10, 15):  # wooden pier planks at the approach column
+    for wy in range(8, 13):  # wooden pier planks at the approach column
         plank = make_surface(TILE_SIZE, TILE_SIZE, (110, 80, 50))
         screen.blit(plank, (24 * TILE_SIZE, wy * TILE_SIZE))
-    draw_text(screen, "FISHING PIER", 27 * TILE_SIZE, 9 * TILE_SIZE + 8, CYAN, font_small, center=True)
+    draw_text(screen, "FISHING PIER", 27 * TILE_SIZE, 7 * TILE_SIZE + 8, CYAN, font_small, center=True)
 
     # Paths
     for px in range(8, 22):
@@ -265,7 +265,7 @@ def draw_spaceport():
     draw_box(screen, sign_cx - 60, sign_y, 120, 20, (180, 80, 120), 2)
     draw_text(screen, "COSMIC COMET", sign_cx, sign_y + 10, PINK, font_small, center=True)
 
-    house_positions = [(5, 14), (12, 14), (19, 14), (25, 14)]
+    house_positions = [(5, 14), (9, 14), (19, 14), (25, 14)]
     house_labels = ["Nova's Home", "Pip's Home", "Luna's Home", "Rex's Home"]
     for i, (hx, hy) in enumerate(house_positions):
         hb = get_building_surf("house")
@@ -278,6 +278,30 @@ def draw_spaceport():
         draw_box(door_surf, 0, 0, 8, 12, (100, 80, 60), True)
         draw_box(door_surf, 2, 0, 4, 12, (80, 60, 40), True)
         screen.blit(door_surf, (door_x, door_y))
+
+    # Quest board signpost (tile 6, 10)
+    qb_x, qb_y = 6 * TILE_SIZE, 10 * TILE_SIZE
+    draw_box(screen, qb_x - 6, qb_y - 20, TILE_SIZE + 12, 24, (70, 50, 30), True)
+    draw_box(screen, qb_x - 6, qb_y - 20, TILE_SIZE + 12, 24, (160, 120, 70), 2)
+    draw_text(screen, "QUESTS", qb_x + TILE_SIZE // 2, qb_y - 8, GOLD, font_small, center=True)
+    draw_box(screen, qb_x + TILE_SIZE // 2 - 2, qb_y + 4, 4, 12, (90, 70, 50), True)
+
+    # Spaceport Observatory (tile 3, 3) — flavor unlocks at Legend rank
+    ob_unlocked = game.get_rank() >= 5
+    ob_cx = 3 * TILE_SIZE + TILE_SIZE // 2
+    ob_cy = 3 * TILE_SIZE + TILE_SIZE // 2
+    dome_c = (120, 160, 220) if ob_unlocked else (70, 70, 90)
+    pygame.draw.rect(screen, (60, 60, 80), (3 * TILE_SIZE, 3 * TILE_SIZE + TILE_SIZE // 2, TILE_SIZE, TILE_SIZE // 2))
+    pygame.draw.circle(screen, dome_c, (ob_cx, ob_cy), 15)
+    draw_text(screen, "OBSERVATORY" if ob_unlocked else "Observatory (locked)",
+              ob_cx, 3 * TILE_SIZE - 8, CYAN if ob_unlocked else GRAY, font_small, center=True)
+
+    # Traveling Merchant Cosmo (tile 5, 8) when visiting
+    if game.merchant_present:
+        cx, cy = 5 * TILE_SIZE, 8 * TILE_SIZE
+        cosmo = get_npc_surf("cosmo", (200, 160, 80), (120, 80, 40))
+        screen.blit(cosmo, (cx, cy - TILE_SIZE))
+        draw_text(screen, "Cosmo (Merchant)", cx + TILE_SIZE // 2, cy - TILE_SIZE - 8, GOLD, font_small, center=True)
 
     # NPC location markers (visible from afar)
     for npc in game.npcs:
@@ -295,7 +319,7 @@ def draw_spaceport():
         draw_text(screen, npc.name, nx + TILE_SIZE // 2, ny - 8, WHITE, font_small, center=True)
 
     # Alien decorations
-    for ax, ay in [(3, 10), (10, 16), (23, 3), (28, 8), (2, 18)]:
+    for ax, ay in [(3, 10), (10, 16), (23, 3), (28, 16), (2, 18)]:
         if ax < SPACEPORT_TILES_X and ay < SPACEPORT_TILES_Y:
             deco = make_surface(TILE_SIZE, TILE_SIZE)
             for _ in range(8):

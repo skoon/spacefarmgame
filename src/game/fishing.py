@@ -115,6 +115,7 @@ class FishingMixin:
         self.fishing_caught_fish = fid
         self.fishing_state = "caught"
         self.add_skill_xp("exploration", 3)
+        self.check_quest_progress("fish", None, 1)
         size = random.choice(["tiny", "small", "average", "large", "huge"])
         extra = "  (NEW!)" if first else ""
         self.set_message(f"Caught a {size} {f['name']}!{extra}")

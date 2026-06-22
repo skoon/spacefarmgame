@@ -161,7 +161,7 @@ class NPC:
             self.base_tile_x, self.base_tile_y = 6, 17
             self.screen = "spaceport"
         elif self.location == "house2":
-            self.base_tile_x, self.base_tile_y = 13, 17
+            self.base_tile_x, self.base_tile_y = 10, 17
             self.screen = "spaceport"
         elif self.location == "house3":
             self.base_tile_x, self.base_tile_y = 20, 17

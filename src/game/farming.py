@@ -72,6 +72,7 @@ class FarmingMixin:
                                        CROP_TYPES[crop_type]["color"], 15)
                     self.set_message(f"Harvested {count}x {CROP_TYPES[crop_type]['name']}! (+{value}g)")
                     self.add_skill_xp("farming", 5)
+                    self.check_quest_progress("harvest", crop_type, count)
                     self.advance_time()
             else:
                 self.set_message("Nothing to harvest here.")

@@ -41,6 +41,8 @@ class SocialMixin:
         self.dialogue_index = 0
         self.gift_mode = False
         self.add_skill_xp("social", 3)
+        if gain > 0:
+            self.add_reputation(2 * gain)
         return True
 
     def start_dialogue(self, npc):

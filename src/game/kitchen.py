@@ -27,6 +27,7 @@ class KitchenMixin:
         self.cooking_active = False
         self.set_message(f"Cooked {count}x {dish_name}! +{energy_gain} energy!")
         self.add_skill_xp("cooking", 3 * count)
+        self.check_quest_progress("cook", dish_name, count)
 
     def start_crafting(self, recipe_key, count=1):
         recipe = ARTISAN_RECIPES.get(recipe_key)

@@ -141,13 +141,13 @@ def draw_bot_shop():
     overlay.set_alpha(200)
     overlay.fill((0, 0, 20))
     screen.blit(overlay, (0, 0))
-    panel_w, panel_h = 550, 330
+    bot_keys = game.shop_bot_keys()
+    panel_w, panel_h = 550, 90 + len(bot_keys) * 70 + 25
     px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
     pygame.draw.rect(screen, (20, 20, 40), (px, py, panel_w, panel_h))
     pygame.draw.rect(screen, (80, 120, 180), (px, py, panel_w, panel_h), 3)
     draw_text(screen, "Bot Workshop", px + panel_w // 2, py + 15, CYAN, font_large, center=True)
     draw_text(screen, f"Gold: {game.player.gold}g", px + panel_w // 2, py + 42, GOLD, font_med, center=True)
-    bot_keys = list(BOT_TYPES.keys())
     for i, bk in enumerate(bot_keys):
         bt = BOT_TYPES[bk]
         yy = py + 75 + i * 70
@@ -156,8 +156,8 @@ def draw_bot_shop():
         screen.blit(icon, (px + 30, yy + 4))
         draw_text(screen, bt["name"], px + 70, yy + 6, WHITE, font_med)
         draw_text(screen, f"Range: {bt['range']} tiles | Upkeep: {bt['upkeep']}g/day", px + 70, yy + 28, LIGHT_GRAY, font_small)
-        draw_text(screen, f"[{i+1}] {bt['cost']}g", px + panel_w - 80, yy + 14, GOLD, font_med)
-    draw_text(screen, "1-3: Buy | ESC: Exit", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
+        draw_text(screen, f"[{i+1}] {bt['cost']}g", px + panel_w - 80, yy + 14, GOLD, font_small)
+    draw_text(screen, f"1-{len(bot_keys)}: Buy | ESC: Exit", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
 
 def draw_hangar():
     if not game.hangar_active:
@@ -436,26 +436,35 @@ def draw_building_shop():
     overlay.set_alpha(200)
     overlay.fill((0, 0, 20))
     screen.blit(overlay, (0, 0))
-    panel_w, panel_h = 550, 420
+    bk = list(BUILDING_TYPES.keys())
+    row_h = 70
+    panel_w = 600
+    panel_h = 90 + len(bk) * row_h + 40
     px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
     pygame.draw.rect(screen, (20, 20, 30), (px, py, panel_w, panel_h))
     pygame.draw.rect(screen, (80, 120, 80), (px, py, panel_w, panel_h), 3)
     draw_text(screen, "Construction Shop", px + panel_w // 2, py + 15, GOLD, font_large, center=True)
     draw_text(screen, f"Gold: {game.player.gold}g", px + panel_w // 2, py + 42, GOLD, font_med, center=True)
-    bk = list(BUILDING_TYPES.keys())
+    box_h = row_h - 10
+    icon_box = box_h - 8
     for i, btype in enumerate(bk):
         bt = BUILDING_TYPES[btype]
-        yy = py + 75 + i * 70
+        yy = py + 75 + i * row_h
         can_afford = game.player.gold >= bt["cost"]
         bg = (40, 40, 50) if can_afford else (30, 20, 20)
-        pygame.draw.rect(screen, bg, (px + 20, yy, panel_w - 40, 60))
-        pygame.draw.rect(screen, (80, 100, 80), (px + 20, yy, panel_w - 40, 60), 1)
+        pygame.draw.rect(screen, bg, (px + 20, yy, panel_w - 40, box_h))
+        pygame.draw.rect(screen, (80, 100, 80), (px + 20, yy, panel_w - 40, box_h), 1)
         bsurf = get_building_surf(btype)
-        screen.blit(bsurf, (px + 28, yy + 4))
-        draw_text(screen, bt["name"], px + 70, yy + 6, WHITE if can_afford else GRAY, font_small)
-        draw_text(screen, bt["desc"], px + 70, yy + 28, LIGHT_GRAY, font_small)
-        draw_text(screen, f"[{i+1}] {bt['cost']}g", px + panel_w - 80, yy + 14, GOLD if can_afford else RED, font_small)
-    draw_text(screen, "1-4: Buy  |  ESC: Exit", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
+        iw, ih = bsurf.get_size()
+        scale = min(icon_box / iw, icon_box / ih)
+        bsurf = pygame.transform.scale(bsurf, (max(1, int(iw * scale)), max(1, int(ih * scale))))
+        screen.blit(bsurf, (px + 30 + (icon_box - bsurf.get_width()) // 2,
+                            yy + (box_h - bsurf.get_height()) // 2))
+        text_x = px + 30 + icon_box + 12
+        draw_text(screen, bt["name"], text_x, yy + 8, WHITE if can_afford else GRAY, font_small)
+        draw_text(screen, bt["desc"], text_x, yy + 30, LIGHT_GRAY, font_small)
+        draw_text(screen, f"[{i+1}] {bt['cost']}g", px + panel_w - 90, yy + 18, GOLD if can_afford else RED, font_small)
+    draw_text(screen, f"1-{len(bk)}: Buy  |  ESC: Exit", px + panel_w // 2, py + panel_h - 25, LIGHT_GRAY, font_small, center=True)
 
 def draw_shipping_bin():
     if game.subscreen != "shipping_bin":
@@ -631,3 +640,70 @@ def draw_fishing():
             screen.blit(sil, (slot_x, panel_y + 30))
 
     draw_text(screen, "ESC: Leave the pier", SCREEN_WIDTH - 12, panel_y + 6, LIGHT_GRAY, font_small)
+
+def draw_quest_board():
+    if not game.quest_board_active:
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 600, 460
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (25, 20, 35), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (180, 150, 90), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "~ Quest Board ~", px + panel_w // 2, py + 15, GOLD, font_large, center=True)
+    draw_text(screen, f"Rank: {game.get_rank_name()}  |  {game.reputation} rep  |  Completed: {game.completed_quests}",
+              px + panel_w // 2, py + 44, CYAN, font_med, center=True)
+    if not game.active_quests:
+        draw_text(screen, "No quests today. Check back tomorrow!", px + panel_w // 2, py + 130, LIGHT_GRAY, font_med, center=True)
+    for i, q in enumerate(game.active_quests):
+        yy = py + 75 + i * 95
+        if q["claimed"]:
+            bg = (25, 35, 25)
+        elif q["completed"]:
+            bg = (45, 40, 20)
+        else:
+            bg = (35, 30, 45)
+        pygame.draw.rect(screen, bg, (px + 20, yy, panel_w - 40, 84))
+        pygame.draw.rect(screen, (110, 90, 130), (px + 20, yy, panel_w - 40, 84), 1)
+        draw_text(screen, f"{q['name']}: {q['desc']}", px + 34, yy + 8, WHITE, font_med)
+        draw_text(screen, f"Reward: {q['reward_gold']}g, +{q['reward_rep']} rep", px + 34, yy + 34, GOLD, font_small)
+        if q["claimed"]:
+            status, scol, action = "CLAIMED", GRAY, ""
+        elif q["completed"]:
+            status, scol, action = "READY!", ENERGY_GREEN, f"[{i+1}] Claim"
+        elif q["accepted"]:
+            status, scol, action = f"In progress  {q['progress']}/{q['count']}", CYAN, ""
+        else:
+            status, scol, action = "Available", LIGHT_GRAY, f"[{i+1}] Accept"
+        draw_text(screen, status, px + 34, yy + 56, scol, font_small)
+        if action:
+            draw_text(screen, action, px + panel_w - 140, yy + 34, GOLD, font_med)
+    draw_text(screen, "1-3: Accept / Claim  |  ESC: Close", px + panel_w // 2, py + panel_h - 22, LIGHT_GRAY, font_small, center=True)
+
+def draw_merchant_shop():
+    if not game.merchant_shop_active:
+        return
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 20))
+    screen.blit(overlay, (0, 0))
+    panel_w, panel_h = 560, 400
+    px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
+    pygame.draw.rect(screen, (35, 25, 20), (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, (200, 160, 90), (px, py, panel_w, panel_h), 3)
+    draw_text(screen, "~ Traveling Merchant ~", px + panel_w // 2, py + 15, GOLD, font_large, center=True)
+    draw_text(screen, f"Cosmo's wares  |  Gold: {game.player.gold}g", px + panel_w // 2, py + 44, CYAN, font_med, center=True)
+    if not game.merchant_items:
+        draw_text(screen, "Sold out! Come back next visit.", px + panel_w // 2, py + 130, LIGHT_GRAY, font_med, center=True)
+    for i, item in enumerate(game.merchant_items):
+        yy = py + 80 + i * 90
+        can = game.player.gold >= item["price"]
+        bg = (50, 40, 30) if can else (35, 25, 20)
+        pygame.draw.rect(screen, bg, (px + 20, yy, panel_w - 40, 78))
+        pygame.draw.rect(screen, (130, 100, 70), (px + 20, yy, panel_w - 40, 78), 1)
+        draw_text(screen, item["name"], px + 34, yy + 10, WHITE if can else GRAY, font_med)
+        draw_text(screen, item["desc"], px + 34, yy + 36, LIGHT_GRAY, font_small)
+        draw_text(screen, f"[{i+1}] {item['price']}g", px + panel_w - 140, yy + 30, GOLD if can else RED, font_med)
+    draw_text(screen, "1-3: Buy  |  ESC: Leave", px + panel_w // 2, py + panel_h - 22, LIGHT_GRAY, font_small, center=True)

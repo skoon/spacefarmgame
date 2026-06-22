@@ -43,6 +43,15 @@ def draw_hud():
     if shed_count > 0:
         draw_text(screen, f"Storage Shed (+{shed_count * 24} slots)", 10, 80, CYAN, font_small)
 
+    draw_text(screen, f"Rank: {game.get_rank_name()}  ({game.reputation} rep)", 10, 96, (200, 170, 255), font_small)
+    tracked = [q for q in game.active_quests if q["accepted"] and not q["claimed"]]
+    qy = 112
+    for q in tracked[:4]:
+        mark = "DONE" if q["completed"] else f"{q['progress']}/{q['count']}"
+        col = GOLD if q["completed"] else WHITE
+        draw_text(screen, f"• {q['desc']} [{mark}]", 10, qy, col, font_small)
+        qy += 16
+
     if game.player.current_map == "farm" and not any([game.dialogue_active, game.shop_active, game.bot_shop_active, game.hangar_active, game.inventory_active, game.seed_select_active, game.sleep_prompt, game.bar_active, game.festival_active, game.save_menu_active, game.cooking_active, game.crafting_active, game.expand_menu_active, game.building_shop_active, game.subscreen == "shipping_bin", game.build_mode is not None, game.pet_shop_active, game.barn_overlay_active]):
         ftx, fty = game.player.get_facing_tile()
         tile = game.get_tile_at(ftx, fty)
