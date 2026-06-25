@@ -1,9 +1,56 @@
 import pygame
 import random
 import math
+import os
 from src.constants import *
 
 SPRITE_CACHE = {}
+
+# === Sprite Sheet System ===
+SPRITE_SHEETS = {}
+
+def load_sprite_sheet(path):
+    full = os.path.join("assets", path)
+    if path not in SPRITE_SHEETS:
+        SPRITE_SHEETS[path] = pygame.image.load(full).convert_alpha()
+    return SPRITE_SHEETS[path]
+
+def get_sheet_frame(sheet, col, row, cell_w, cell_h):
+    key = f"frame_{sheet}_{col}_{row}_{cell_w}_{cell_h}"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
+    sheet_surf = load_sprite_sheet(sheet)
+    frame = pygame.Surface((cell_w, cell_h), pygame.SRCALPHA)
+    frame.blit(sheet_surf, (0, 0), (col * cell_w, row * cell_h, cell_w, cell_h))
+    SPRITE_CACHE[key] = frame
+    return frame
+
+SHEET_ASTRO = "astro_256_shaded.png"
+SHEET_ASTRO_PD = "astro_256_pixeldata.png"
+SHEET_NPC = {"zara": "npc_zara_256.png", "nova": "npc_nova_256.png", "zoop": "npc_zoop_256.png",
+             "glimmer": "npc_glimmer_256.png", "rigby": "npc_rigby_256.png"}
+SHEET_BOT = {"water_bot": "bot_water_bot_256.png", "sprout_bot": "bot_sprout_bot_256.png",
+             "harvest_bot": "bot_harvest_bot_256.png"}
+SHEET_BUILDING = {"bar": "building_bar_384.png",
+                   "house": "building_house_384.png", "player_house": "building_player_house_384.png"}
+
+# Frame layout maps: (direction, state) -> (col, row)
+# User must edit these when PNG sprite sheets are reorganized.
+ASTRO_FRAME_MAP = {
+    "down":  (2, 0),  # col 2, row 0
+    "left":  (2, 1),
+    "right": (2, 2),
+    "up":    (2, 3),
+}
+NPC_FRAME_MAP = {
+    "down":  (1, 0),
+    "left":  (3, 0),
+    "right": (4, 0),
+    "up":    (2, 0),
+}
+BUILDING_FRAME_MAP = {
+    "default": (1, 1),
+}
 
 # === 16-bit Palette System (M15) ===
 PALETTE = {
@@ -180,7 +227,24 @@ def _build_astro_surf(direction, state, frame):
     return s
 
 def get_astronaut_animated(direction="down", state="idle", frame=0):
-    return _build_astro_surf(direction, state, frame)
+    key = "astro_anim"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
+    sheet_path = os.path.join("assets", "astro_32_shaded.png")
+    if os.path.exists(sheet_path):
+        s = pygame.image.load(sheet_path).convert_alpha()
+        s = scale_to_fill(s, 32, 32)
+    else:
+        s = make_surface(32, 32)
+        draw_box(s, 6, 4, 20, 24, (200, 200, 200), True)
+        draw_box(s, 10, 8, 12, 12, (100, 200, 255), True)
+        set_pixel(s, 12, 12, (255, 255, 255))
+        set_pixel(s, 20, 12, (255, 255, 255))
+        draw_box(s, 10, 22, 4, 6, (100, 100, 100), True)
+        draw_box(s, 18, 22, 4, 6, (100, 100, 100), True)
+        s.set_colorkey(BLACK)
+    SPRITE_CACHE[key] = s
+    return s
 
 def get_astronaut_v2(direction="down"):
     return get_astronaut_animated(direction, "idle", 0)
@@ -190,6 +254,24 @@ def make_surface(w, h, color=None):
     if color:
         s.fill(color)
     return s
+
+def scale_to_fill(surf, target_w, target_h):
+    w, h = surf.get_size()
+    min_x, min_y = w, h
+    max_x, max_y = -1, -1
+    for y in range(h):
+        for x in range(w):
+            if surf.get_at((x, y))[3] > 0:
+                if x < min_x: min_x = x
+                if y < min_y: min_y = y
+                if x > max_x: max_x = x
+                if y > max_y: max_y = y
+    if max_x < 0:
+        return pygame.transform.scale(surf, (target_w, target_h))
+    cw = max_x - min_x + 1
+    ch = max_y - min_y + 1
+    cropped = surf.subsurface((min_x, min_y, cw, ch))
+    return pygame.transform.scale(cropped, (target_w, target_h))
 
 def set_pixel(surf, x, y, color):
     if 0 <= x < surf.get_width() and 0 <= y < surf.get_height():
@@ -307,10 +389,21 @@ def get_npc_surf(npc_id, color1, color2):
     return s
 
 def get_npc_v2(npc_id, color1, color2, direction="down", frame=0):
-    key = f"npcv2_{npc_id}_{direction}_{frame}"
+    key = f"npcv2_{npc_id}"
     if key in SPRITE_CACHE:
         return SPRITE_CACHE[key]
-    s = make_surface(TILE_SIZE, TILE_SIZE * 2)
+    s = None
+    sheet_32_path = os.path.join("assets", f"npc_{npc_id}_32.png")
+    if os.path.exists(sheet_32_path):
+        raw = pygame.image.load(sheet_32_path).convert_alpha()
+        s = scale_to_fill(raw, 32, 64)
+    else:
+        sheet_name = SHEET_NPC.get(npc_id)
+        if sheet_name and os.path.exists(os.path.join("assets", sheet_name)):
+            col_offset, row = NPC_FRAME_MAP.get(direction, (1, 0))
+            s = get_sheet_frame(sheet_name, col_offset + frame, row, 32, 64).copy()
+    if s is None:
+        s = make_surface(TILE_SIZE, TILE_SIZE * 2)
     c1, c2 = color1, color2
     dark = tuple(max(0, x - 60) for x in c1)
     light = tuple(min(255, x + 40) for x in c1)
@@ -529,69 +622,144 @@ def get_tile_surf(tile_type, variant=0):
     SPRITE_CACHE[key] = s
     return s
 
+CROP_PIXEL_DATA = {
+    "glowroot": {
+        "stages": [
+            [("box", 13, 26, 6, 4, (40, 180, 40))],
+            [("box", 12, 22, 8, 8, (40, 180, 40)), ("box", 13, 20, 6, 3, (60, 220, 60))],
+            [("box", 11, 18, 10, 12, (40, 180, 40)), ("box", 13, 28, 6, 2, (100, 255, 100)),
+             ("box", 14, 27, 4, 3, (150, 255, 150))],
+        ],
+    },
+    "zargon_fruit": {
+        "stages": [
+            [("box", 14, 26, 4, 4, (120, 40, 160))],
+            [("box", 8, 24, 16, 6, (80, 30, 120)), ("box", 14, 22, 4, 4, (120, 40, 160))],
+            [("box", 6, 22, 20, 8, (80, 30, 120)), ("box", 10, 20, 4, 4, (160, 60, 200)),
+             ("box", 18, 20, 4, 4, (160, 60, 200))],
+            [("box", 8, 20, 16, 10, (60, 20, 100)), ("box", 6, 22, 20, 8, (80, 30, 120)),
+             ("box", 10, 18, 4, 6, (180, 80, 220)), ("box", 18, 18, 4, 6, (180, 80, 220)),
+             ("box", 12, 16, 8, 4, (200, 100, 240))],
+        ],
+    },
+    "cosmic_wheat": {
+        "stages": [
+            [("box", 14, 26, 4, 4, (180, 180, 60))],
+            [("box", 12, 22, 8, 8, (180, 180, 60)), ("box", 14, 20, 4, 4, (220, 200, 80))],
+            [("box", 10, 18, 12, 12, (160, 160, 50)), ("box", 11, 16, 10, 4, (220, 220, 80)),
+             ("box", 13, 14, 6, 4, (255, 220, 80)), ("box", 12, 12, 8, 3, (255, 240, 120))],
+        ],
+    },
+    "starlight_melon": {
+        "stages": [
+            [("box", 14, 26, 4, 4, (60, 160, 200))],
+            [("box", 12, 24, 8, 6, (80, 140, 180)), ("box", 14, 22, 4, 4, (60, 180, 220))],
+            [("box", 10, 22, 12, 8, (80, 140, 180)), ("box", 8, 24, 4, 4, (60, 200, 100)),
+             ("box", 20, 24, 4, 4, (60, 200, 100))],
+            [("box", 10, 20, 12, 10, (60, 160, 200)), ("box", 12, 18, 8, 4, (100, 200, 255)),
+             ("box", 14, 16, 4, 4, (80, 180, 220))],
+            [("box", 8, 18, 16, 12, (60, 140, 200)), ("box", 9, 16, 14, 4, (100, 200, 255)),
+             ("box", 12, 14, 8, 4, (130, 220, 255)), ("box", 10, 26, 12, 3, (40, 120, 180)),
+             ("pixel", 14, 13, WHITE), ("pixel", 18, 15, WHITE), ("pixel", 10, 17, WHITE)],
+        ],
+    },
+    "nebula_bloom": {
+        "stages": [
+            [("box", 14, 26, 4, 4, (200, 80, 160))],
+            [("box", 14, 22, 4, 8, (40, 180, 40)), ("box", 13, 20, 6, 3, (200, 80, 160))],
+            [("box", 14, 20, 4, 10, (40, 180, 40)), ("box", 11, 18, 10, 4, (220, 100, 180))],
+            [("box", 14, 18, 4, 12, (40, 180, 40)), ("box", 8, 16, 16, 6, (255, 120, 200)),
+             ("box", 10, 15, 12, 3, (255, 160, 220)), ("pixel", 14, 14, (255, 200, 100)),
+             ("box", 6, 17, 4, 4, (200, 80, 160)), ("box", 22, 17, 4, 4, (200, 80, 160))],
+        ],
+    },
+    "quasar_berry": {
+        "stages": [
+            [("box", 14, 26, 4, 4, (200, 60, 40))],
+            [("box", 12, 24, 8, 6, (40, 180, 40)), ("box", 13, 22, 6, 4, (60, 200, 60))],
+            [("box", 10, 22, 12, 8, (40, 180, 40)), ("box", 11, 20, 10, 4, (60, 200, 60)),
+             ("box", 8, 24, 4, 4, (40, 160, 40))],
+            [("box", 10, 22, 12, 8, (40, 180, 40)), ("box", 11, 20, 10, 4, (60, 200, 60)),
+             ("box", 8, 24, 4, 4, (40, 160, 40)),
+             ("box", 12, 20, 3, 3, (255, 80, 50)), ("box", 17, 20, 3, 3, (255, 80, 50)),
+             ("box", 14, 22, 4, 3, (255, 60, 40)), ("box", 9, 22, 2, 3, (255, 80, 50)),
+             ("box", 21, 22, 2, 3, (255, 80, 50))],
+        ],
+    },
+}
+
 def get_crop_surf(crop_key, stage, total_stages):
     key = f"crop_{crop_key}_{stage}"
     if key in SPRITE_CACHE:
         return SPRITE_CACHE[key]
-    data = CROP_TYPES[crop_key]
-    color = data["color"]
     s = make_surface(TILE_SIZE, TILE_SIZE)
-    progress = stage / max(total_stages - 1, 1)
-    center_x, base_y = TILE_SIZE // 2, TILE_SIZE - 4
-    if stage == 0:
-        draw_box(s, center_x - 1, base_y - 2, 3, 3, (40, 180, 40), True)
-    elif stage == 1:
-        h = int(6 + progress * 10)
-        for i in range(3):
-            ox = center_x - 3 + i * 3
-            draw_box(s, ox, base_y - h, 2, h, (50 + i * 20, 150 + int(progress * 50), 50), True)
-    elif stage == 2 and progress >= 0.5:
-        h = 14
-        for i in range(3):
-            ox = center_x - 4 + i * 4
-            draw_box(s, ox, base_y - h, 3, h, color, True)
-        draw_box(s, center_x - 3, base_y - h - 2, 6, 3, color, True)
-    elif stage >= total_stages - 1 or progress >= 0.8:
-        h = 16
-        for i in range(3):
-            ox = center_x - 4 + i * 4
-            draw_box(s, ox, base_y - h, 3, h, (40, 180, 40), True)
-        draw_box(s, center_x - 5, base_y - h - 4, 10, 6, color, True)
-        set_pixel(s, center_x, base_y - h - 5, YELLOW)
-        set_pixel(s, center_x - 3, base_y - h - 3, YELLOW)
-        set_pixel(s, center_x + 3, base_y - h - 3, YELLOW)
-        set_pixel(s, center_x - 1, base_y - h - 1, YELLOW)
+    if crop_key in CROP_PIXEL_DATA:
+        stages = CROP_PIXEL_DATA[crop_key]["stages"]
+        idx = min(stage, len(stages) - 1)
+        for cmd in stages[idx]:
+            if cmd[0] == "box":
+                _, x, y, w, h, color = cmd
+                draw_box(s, x, y, w, h, color, True)
+            elif cmd[0] == "pixel":
+                _, x, y, color = cmd
+                set_pixel(s, x, y, color)
+    else:
+        data = CROP_TYPES[crop_key]
+        color = data["color"]
+        base_y = TILE_SIZE - 4
+        draw_box(s, 13, base_y - 4, 6, 6, color, True)
+        draw_box(s, 14, base_y - 6, 4, 3, (40, 180, 40), True)
     s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s
 
 def get_building_v2(building_type, anim_frame=0):
-    base = get_building_surf(building_type)
-    key = f"buildingv2_{building_type}_{anim_frame}"
-    if key in SPRITE_CACHE:
-        return SPRITE_CACHE[key]
-    s = base.copy()
-    bw, bh = BUILDING_TYPES.get(building_type, {}).get("size", (3, 3))
-    w, h = bw * TILE_SIZE, bh * TILE_SIZE
+    t = pygame.time.get_ticks()
+    key_96 = f"building_96_{building_type}"
+    if key_96 not in SPRITE_CACHE:
+        sheet_96_path = os.path.join("assets", f"building_{building_type}_96.png")
+        if os.path.exists(sheet_96_path):
+            raw = pygame.image.load(sheet_96_path).convert_alpha()
+            bw, bh = BUILDING_TYPES.get(building_type, {}).get("size", (3, 3))
+            w, h = bw * TILE_SIZE, bh * TILE_SIZE
+            SPRITE_CACHE[key_96] = scale_to_fill(raw, w, h)
+    if key_96 in SPRITE_CACHE:
+        s = SPRITE_CACHE[key_96].copy()
+        w, h = s.get_size()
+    else:
+        sheet_name = SHEET_BUILDING.get(building_type)
+        col, row = BUILDING_FRAME_MAP.get("default", (1, 1))
+        if sheet_name and os.path.exists(os.path.join("assets", sheet_name)):
+            bw, bh = BUILDING_TYPES.get(building_type, {}).get("size", (3, 3))
+            w, h = bw * TILE_SIZE, bh * TILE_SIZE
+            key = f"building_sheet_{building_type}"
+            if key not in SPRITE_CACHE:
+                sheet_surf = load_sprite_sheet(sheet_name)
+                base = pygame.Surface((w, h), pygame.SRCALPHA)
+                base.blit(sheet_surf, (0, 0), (col * 96, row * 96, w, h))
+                SPRITE_CACHE[key] = base
+            s = SPRITE_CACHE[key].copy()
+        else:
+            base = get_building_surf(building_type)
+            s = base.copy()
+            bw, bh = BUILDING_TYPES.get(building_type, {}).get("size", (3, 3))
+            w, h = bw * TILE_SIZE, bh * TILE_SIZE
 
     if building_type == "shop":
-        # Chimney smoke
-        if anim_frame % 2 == 0:
-            smoke_y = 4 + (anim_frame // 2) % 6
-            smoke_x = 12 + (anim_frame // 2) * 3
-            set_pixel(s, smoke_x, smoke_y, (200, 200, 200, 120))
-        # Window glow at night / idle
-        glow_bright = 180 + int(75 * math.sin(anim_frame * 0.5))
+        smoke_y = 4 + (t // 200) % 8
+        smoke_x = 18 + ((t // 300) % 5 - 2)
+        set_pixel(s, smoke_x, smoke_y, (180, 180, 190))
+        set_pixel(s, smoke_x + 1, smoke_y - 1, (160, 160, 170))
         for gx in [16, 26, 64, 78]:
             for gy in [36, 44, 52]:
-                set_pixel(s, gx, gy, (glow_bright, glow_bright, 255))
+                set_pixel(s, gx, gy, (255, 240, 200))
+                set_pixel(s, gx + 1, gy, (255, 240, 180))
 
     elif building_type == "bar":
-        # Neon tube pulse
-        neon = 0.5 + 0.5 * math.sin(anim_frame * 0.3)
+        neon = 0.5 + 0.5 * math.sin(t * 0.005)
         nr = int(200 + 55 * neon)
-        ng = int(80 + 40 * neon)
-        nb = int(120 + 80 * neon)
+        ng = int(60 + 40 * neon)
+        nb = int(100 + 80 * neon)
         for i in range(8):
             nx = 22 + i * 6
             set_pixel(s, nx, 14, (nr, ng, nb))
@@ -599,27 +767,24 @@ def get_building_v2(building_type, anim_frame=0):
             set_pixel(s, nx, 16, (nr, ng, nb))
 
     elif building_type == "house":
-        # Window glow
-        glow = 180 if (anim_frame // 4) % 2 == 0 else 220
+        glow = 200 + int(40 * math.sin(t * 0.003))
         draw_box(s, 10, 14, 6, 6, (glow, glow, 255), True)
         draw_box(s, w - 16, 14, 6, 6, (glow, glow, 255), True)
 
     elif building_type == "player_house":
-        glow = 180 if (anim_frame // 4) % 2 == 0 else 220
+        glow = 200 + int(40 * math.sin(t * 0.003))
         draw_box(s, 8, 16, 6, 6, (glow, glow, 255), True)
         draw_box(s, w - 14, 16, 6, 6, (glow, glow, 255), True)
 
     elif building_type == "well":
-        # Water shimmer
-        shimmer = int(60 * math.sin(anim_frame * 0.5))
-        for wx in range(10, 22, 4):
-            for wy in range(14, 20, 4):
-                b = 180 + shimmer
-                set_pixel(s, wx, wy, (120, b, 255))
+        for wx in range(10, 22, 3):
+            for wy in range(14, 20, 3):
+                shimmer = int(40 * math.sin(t * 0.004 + wx * 0.5 + wy * 0.7))
+                b = 200 + shimmer
+                set_pixel(s, wx, wy, (100, b, 255))
 
     elif building_type == "greenhouse":
-        # Plant pulse (deterministic per tile + frame)
-        pulse = int(30 * math.sin(anim_frame * 0.4))
+        pulse = int(25 * math.sin(t * 0.004))
         for gy in range(3):
             for gx in range(4):
                 px = 6 + gx * ((w - 12) // 4)
@@ -627,29 +792,26 @@ def get_building_v2(building_type, anim_frame=0):
                 pw = (w - 12) // 4 - 2
                 ph = (h - 12) // 3 - 2
                 for i in range(2):
-                    sx = px + 2 + ((gx * 7 + gy * 11 + i * 17 + anim_frame * 3) % max(1, pw - 4))
-                    sy = py + 2 + ((gy * 13 + gx * 5 + i * 19) % max(1, ph - 4))
+                    sx = px + 2 + ((gx * 7 + gy * 11 + i * 17 + t // 200) % max(1, pw - 4))
+                    sy = py + 2 + ((gy * 13 + gx * 5 + t // 150) % max(1, ph - 4))
                     g = min(255, 140 + pulse + gy * 20)
                     set_pixel(s, sx, sy, (60, g, 60))
 
     elif building_type == "shipping_bin":
-        # Lid animation — flip up on frame 1
-        if anim_frame % 4 >= 2:
+        if (t // 3000) % 2 == 0:
             hline(s, 2, 0, 28, (100, 80, 50))
             set_pixel(s, 16, 2, (180, 160, 80))
             set_pixel(s, 16, 3, (200, 180, 100))
 
     elif building_type == "barn":
-        # Weather vane rotation
+        angle = t * 0.001
         vx, vy = w // 2, 2
-        angle = anim_frame * 0.3
         dx = int(4 * math.cos(angle))
         dy = int(4 * math.sin(angle))
         set_pixel(s, vx + dx, vy + dy, (200, 180, 100))
         set_pixel(s, vx - dx, vy - dy, (200, 180, 100))
 
     s.set_colorkey(BLACK)
-    SPRITE_CACHE[key] = s
     return s
 
 def get_building_surf(building_type):
@@ -1035,6 +1197,37 @@ def get_interior_surf(interior_type):
             set_pixel(s, 40 + li * 80, 10, (200, 180, 100))
             set_pixel(s, 40 + li * 80, 20, (200, 180, 100))
 
+    elif interior_type == "shop_interior":
+        wall = (60, 40, 80)
+        floor = (80, 55, 50)
+        draw_box(s, 0, 0, w, h, wall, True)
+        draw_box(s, 0, 340, w, 300, floor, True)
+        hline(s, 0, 340, w, (50, 30, 60))
+        # Shelves left
+        for sx in [30, 140]:
+            draw_box(s, sx, 100, 80, 220, (90, 70, 60), True)
+            draw_box(s, sx, 100, 80, 6, (110, 90, 75), True)
+            draw_box(s, sx + 15, 120, 10, 10, (100, 200, 100), True)
+            draw_box(s, sx + 45, 140, 10, 15, (200, 100, 200), True)
+            draw_box(s, sx + 25, 200, 15, 10, (200, 200, 100), True)
+            draw_box(s, sx + 55, 230, 10, 10, (100, 100, 200), True)
+        # Counter
+        draw_box(s, 300, 200, 300, 140, (120, 90, 70), True)
+        draw_box(s, 300, 200, 300, 10, (140, 110, 85), True)
+        draw_box(s, 300, 320, 300, 8, (100, 75, 55), True)
+        # Register
+        draw_box(s, 420, 210, 60, 40, (80, 80, 60), True)
+        draw_box(s, 435, 220, 10, 10, (100, 255, 100), True)
+        draw_box(s, 455, 220, 10, 10, (255, 100, 100), True)
+        # Window
+        draw_box(s, 680, 80, 180, 120, (120, 160, 220), True)
+        draw_box(s, 680, 80, 180, 120, (160, 200, 255), 2)
+        vline(s, 770, 80, 120, (160, 200, 255))
+        hline(s, 680, 140, 180, (160, 200, 255))
+        # Door frame right
+        draw_box(s, 880, 160, 60, 180, (80, 60, 50), True)
+        draw_box(s, 890, 170, 40, 160, (60, 40, 35), True)
+
     elif interior_type == "hangar_interior":
         wall = (60, 60, 75)
         floor = (80, 80, 95)
@@ -1076,37 +1269,56 @@ def get_animal_surf(animal_type):
         return SPRITE_CACHE[key]
     s = make_surface(32, 32)
     if animal_type == "zap_chicken":
+        # Body
         draw_box(s, 8, 16, 16, 12, (255, 220, 100), True)
         draw_box(s, 9, 15, 14, 10, (255, 235, 140), True)
         draw_box(s, 10, 14, 12, 8, (255, 245, 180), True)
+        # Eyes
         set_pixel(s, 12, 12, (255, 200, 50))
         set_pixel(s, 13, 12, (255, 200, 50))
         set_pixel(s, 19, 12, (255, 200, 50))
         set_pixel(s, 20, 12, (255, 200, 50))
+        # Beak
         draw_box(s, 11, 13, 10, 2, (255, 180, 60), True)
+        # Tail / wings
         set_pixel(s, 22, 14, (255, 150, 50))
         set_pixel(s, 23, 15, (255, 150, 50))
+        # Legs
         for i in range(3):
             set_pixel(s, 5 + i * 2, 18 + i, (255, 220, 100))
             set_pixel(s, 26 - i * 2, 18 + i, (255, 220, 100))
+        # Pupils
         set_pixel(s, 14, 14, (80, 60, 40))
         set_pixel(s, 17, 14, (80, 60, 40))
+        # Sparkles
         for sp in range(4):
             sx = random.randint(6, 25)
             sy = random.randint(10, 18)
             set_pixel(s, sx, sy, (255, 255, 150))
+        # Comb
+        draw_box(s, 12, 11, 3, 2, (255, 100, 50), True)
+        draw_box(s, 17, 11, 3, 2, (255, 100, 50), True)
+        # Enhanced wing sparkle
+        draw_box(s, 7, 15, 2, 4, (255, 200, 80), True)
+        draw_box(s, 23, 15, 2, 4, (255, 200, 80), True)
     elif animal_type == "moo_droid":
+        # Body
         draw_box(s, 6, 14, 20, 14, (100, 200, 255), True)
         draw_box(s, 7, 13, 18, 12, (130, 215, 255), True)
         draw_box(s, 8, 12, 16, 10, (160, 230, 255), True)
+        # Belly stripe
         draw_box(s, 6, 16, 20, 3, (80, 180, 230), True)
+        # Horns / antenna
         draw_box(s, 10, 10, 4, 4, (80, 180, 255), True)
         draw_box(s, 18, 10, 4, 4, (80, 180, 255), True)
+        # Eyes
         set_pixel(s, 12, 12, (60, 60, 80))
         set_pixel(s, 13, 12, (60, 60, 80))
         set_pixel(s, 20, 12, (60, 60, 80))
         set_pixel(s, 21, 12, (60, 60, 80))
+        # Nose / tag
         set_pixel(s, 16, 11, (60, 60, 80))
+        # Legs
         set_pixel(s, 6, 22, (80, 160, 200))
         set_pixel(s, 7, 23, (80, 160, 200))
         set_pixel(s, 25, 22, (80, 160, 200))
@@ -1114,45 +1326,120 @@ def get_animal_surf(animal_type):
         for i in range(3):
             set_pixel(s, 10 + i, 26, (150, 200, 230))
             set_pixel(s, 19 + i, 26, (150, 200, 230))
+        # Hooves
         set_pixel(s, 9, 27, (60, 60, 60))
         set_pixel(s, 22, 27, (60, 60, 60))
+        # Bell / udder
         set_pixel(s, 14, 26, (200, 150, 80))
         set_pixel(s, 15, 26, (200, 150, 80))
+        # Panel lights
+        set_pixel(s, 12, 18, (100, 255, 100))
+        set_pixel(s, 20, 18, (100, 255, 100))
+        set_pixel(s, 16, 20, (255, 100, 100))
     elif animal_type == "fluffalo":
+        # Fluffy body
         draw_box(s, 4, 10, 24, 18, (255, 180, 255), True)
         draw_box(s, 5, 9, 22, 16, (255, 200, 255), True)
         draw_box(s, 6, 8, 20, 14, (255, 220, 255), True)
-        for fx in range(5, 27, 4):
+        # Fluffy texture
+        for fx in range(4, 28, 4):
             for fy in range(8, 24, 3):
                 set_pixel(s, fx + random.randint(0, 2), fy, (255, 235, 255))
+        # Ears
         draw_box(s, 9, 10, 4, 4, (255, 200, 220), True)
         draw_box(s, 19, 10, 4, 4, (255, 200, 220), True)
+        # Eyes
         set_pixel(s, 11, 12, (80, 60, 100))
         set_pixel(s, 12, 12, (80, 60, 100))
         set_pixel(s, 21, 12, (80, 60, 100))
         set_pixel(s, 22, 12, (80, 60, 100))
+        # Nose
         set_pixel(s, 16, 9, (180, 120, 180))
         set_pixel(s, 16, 10, (180, 120, 180))
+        # Horns
         for i in range(4):
             set_pixel(s, 6 + i, 6, (255, 200, 255))
             set_pixel(s, 22 + i, 6, (255, 200, 255))
+        # Legs
         for i in range(3):
             set_pixel(s, 8 + i * 6, 26, (220, 160, 220))
             set_pixel(s, 9 + i * 6, 27, (220, 160, 220))
             set_pixel(s, 10 + i * 6, 28, (220, 160, 220))
+        # Tail poof
+        draw_box(s, 2, 14, 3, 5, (255, 200, 255), True)
+        draw_box(s, 1, 15, 2, 3, (255, 220, 255), True)
+        # Sparkle
+        set_pixel(s, 14, 6, WHITE)
+        set_pixel(s, 18, 7, WHITE)
     s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s
+
+ICON_PIXEL_DATA = {
+    "glowroot": [("box", 4, 7, 8, 8, (100, 220, 100)), ("box", 6, 4, 4, 5, (40, 180, 40)), ("box", 7, 2, 2, 3, (40, 180, 40)), ("box", 8, 12, 2, 2, (150, 255, 150))],
+    "zargon_fruit": [("box", 4, 6, 8, 9, (180, 60, 220)), ("box", 5, 5, 6, 3, (100, 40, 140)), ("box", 6, 4, 4, 2, (40, 180, 40))],
+    "cosmic_wheat": [("box", 7, 3, 2, 12, (180, 180, 60)), ("box", 5, 2, 6, 4, (255, 220, 80)), ("box", 6, 1, 4, 2, (200, 200, 60)), ("box", 4, 9, 2, 6, (40, 180, 40)), ("box", 10, 10, 2, 5, (40, 180, 40))],
+    "starlight_melon": [("box", 3, 6, 10, 9, (80, 180, 255)), ("box", 4, 5, 8, 3, (130, 200, 255)), ("box", 6, 4, 4, 2, (40, 180, 40)), ("pixel", 8, 4, WHITE), ("pixel", 4, 9, WHITE)],
+    "nebula_bloom": [("box", 7, 4, 2, 10, (40, 180, 40)), ("box", 3, 2, 10, 6, (255, 100, 200)), ("box", 4, 1, 8, 3, (255, 140, 220)), ("pixel", 7, 3, (255, 200, 100))],
+    "quasar_berry": [("box", 4, 8, 8, 6, (40, 180, 40)), ("box", 3, 7, 10, 3, (60, 200, 60)), ("box", 5, 7, 3, 3, (255, 80, 50)), ("box", 9, 7, 3, 3, (255, 80, 50)), ("box", 7, 8, 3, 3, (255, 60, 40))],
+    "glowroot_seed": [("box", 3, 5, 10, 8, (200, 180, 100)), ("box", 5, 6, 6, 6, (160, 140, 80)), ("box", 6, 7, 4, 4, (100, 220, 100)), ("box", 7, 3, 2, 3, (40, 180, 40))],
+    "zargon_fruit_seed": [("box", 3, 5, 10, 8, (200, 180, 100)), ("box", 5, 6, 6, 6, (160, 140, 80)), ("box", 6, 7, 4, 4, (180, 60, 220)), ("box", 7, 3, 2, 3, (40, 180, 40))],
+    "cosmic_wheat_seed": [("box", 3, 5, 10, 8, (200, 180, 100)), ("box", 5, 6, 6, 6, (160, 140, 80)), ("box", 6, 7, 4, 4, (255, 220, 80)), ("box", 7, 3, 2, 3, (40, 180, 40))],
+    "starlight_melon_seed": [("box", 3, 5, 10, 8, (200, 180, 100)), ("box", 5, 6, 6, 6, (160, 140, 80)), ("box", 6, 7, 4, 4, (80, 180, 255)), ("box", 7, 3, 2, 3, (40, 180, 40))],
+    "nebula_bloom_seed": [("box", 3, 5, 10, 8, (200, 180, 100)), ("box", 5, 6, 6, 6, (160, 140, 80)), ("box", 6, 7, 4, 4, (255, 100, 200)), ("box", 7, 3, 2, 3, (40, 180, 40))],
+    "quasar_berry_seed": [("box", 3, 5, 10, 8, (200, 180, 100)), ("box", 5, 6, 6, 6, (160, 140, 80)), ("box", 6, 7, 4, 4, (255, 80, 50)), ("box", 7, 3, 2, 3, (40, 180, 40))],
+    "glowroot_salad": [("box", 2, 4, 12, 10, (100, 180, 100)), ("box", 3, 3, 10, 3, (140, 220, 140)), ("box", 4, 2, 8, 2, (60, 200, 60)), ("box", 6, 7, 4, 3, (200, 120, 60))],
+    "zargon_jam": [("box", 2, 4, 12, 10, (100, 60, 140)), ("box", 3, 3, 10, 2, (60, 30, 80)), ("box", 4, 2, 8, 2, (40, 20, 60)), ("box", 6, 8, 4, 4, (180, 80, 220))],
+    "cosmic_bread": [("box", 2, 6, 12, 8, (200, 170, 100)), ("box", 3, 5, 10, 3, (220, 190, 120)), ("box", 4, 4, 8, 2, (180, 150, 80))],
+    "starlight_juice": [("box", 3, 4, 10, 10, (80, 160, 220)), ("box", 4, 3, 8, 2, (60, 120, 180)), ("box", 5, 2, 6, 2, (40, 80, 140)), ("pixel", 8, 6, WHITE)],
+    "nebula_tea": [("box", 3, 5, 10, 9, (200, 120, 180)), ("box", 4, 4, 8, 2, (160, 80, 140)), ("box", 5, 3, 6, 2, (220, 140, 200)), ("pixel", 7, 9, (255, 200, 100))],
+    "berry_smoothie": [("box", 3, 4, 10, 10, (200, 80, 100)), ("box", 4, 3, 8, 2, (160, 50, 70)), ("box", 5, 2, 6, 2, (220, 100, 120)), ("pixel", 6, 7, (255, 200, 200))],
+    "farm_feast": [("box", 2, 6, 12, 8, (200, 160, 80)), ("box", 4, 4, 8, 3, (100, 200, 100)), ("box", 3, 3, 10, 2, (140, 100, 60)), ("box", 6, 9, 4, 2, (255, 80, 50))],
+    "galaxy_delight": [("box", 2, 4, 12, 10, (120, 80, 160)), ("box", 3, 3, 10, 2, (80, 40, 120)), ("box", 4, 2, 8, 2, (160, 100, 200)), ("pixel", 5, 7, WHITE), ("pixel", 11, 7, WHITE)],
+    "starlight_omelette": [("box", 2, 5, 12, 9, (200, 180, 120)), ("box", 3, 4, 10, 3, (220, 200, 140)), ("box", 5, 3, 6, 2, (255, 220, 160)), ("box", 6, 8, 4, 3, (200, 100, 60))],
+    "nebula_milkshake": [("box", 3, 4, 10, 10, (180, 120, 200)), ("box", 4, 3, 8, 2, (140, 80, 160)), ("box", 5, 2, 6, 2, (200, 140, 220)), ("box", 6, 10, 4, 2, (255, 200, 100))],
+    "fish_tacos": [("box", 2, 5, 12, 9, (200, 180, 100)), ("box", 4, 4, 8, 3, (100, 200, 200)), ("box", 3, 3, 10, 2, (160, 120, 60)), ("box", 5, 8, 6, 3, (120, 160, 255))],
+    "sushi_platter": [("box", 2, 5, 12, 9, (180, 160, 200)), ("box", 3, 4, 10, 3, (140, 120, 160)), ("box", 4, 3, 8, 2, (200, 180, 220)), ("box", 6, 8, 4, 3, (220, 120, 160))],
+    "glowroot_chips": [("box", 2, 6, 12, 8, (180, 160, 80)), ("box", 3, 5, 10, 3, (200, 180, 100)), ("box", 4, 4, 8, 2, (160, 140, 60)), ("box", 5, 8, 6, 2, (100, 200, 100))],
+    "cosmic_flour": [("box", 2, 4, 12, 10, (200, 200, 180)), ("box", 3, 3, 10, 2, (180, 180, 160)), ("box", 4, 2, 8, 2, (220, 220, 200)), ("pixel", 8, 8, WHITE)],
+    "zargon_wine": [("box", 2, 5, 12, 9, (100, 40, 140)), ("box", 3, 4, 10, 2, (60, 20, 100)), ("box", 4, 2, 8, 3, (80, 30, 120)), ("box", 7, 10, 2, 2, (200, 100, 240))],
+    "starlight_jam": [("box", 2, 4, 12, 10, (80, 140, 200)), ("box", 3, 3, 10, 2, (50, 100, 160)), ("box", 4, 2, 8, 2, (100, 160, 220)), ("pixel", 6, 8, WHITE)],
+    "nebula_perfume": [("box", 3, 4, 10, 10, (140, 80, 180)), ("box", 4, 3, 8, 2, (100, 50, 140)), ("box", 5, 2, 6, 2, (160, 100, 200)), ("box", 6, 9, 4, 3, (255, 200, 100))],
+    "cosmic_wine": [("box", 2, 5, 12, 9, (140, 100, 60)), ("box", 3, 4, 10, 2, (100, 60, 40)), ("box", 4, 2, 8, 3, (160, 120, 80)), ("box", 6, 10, 4, 2, (255, 220, 80))],
+    "woolen_scarf": [("box", 2, 5, 12, 9, (180, 140, 180)), ("box", 3, 4, 10, 3, (200, 160, 200)), ("box", 4, 3, 8, 2, (160, 120, 160)), ("box", 5, 8, 6, 3, (140, 100, 140))],
+    "aged_cheese": [("box", 3, 5, 10, 9, (220, 200, 120)), ("box", 4, 4, 8, 3, (200, 180, 100)), ("box", 5, 3, 6, 2, (240, 220, 140)), ("pixel", 6, 8, (160, 140, 60))],
+    "nebula_trout": [("box", 2, 6, 12, 5, (120, 180, 255)), ("box", 3, 5, 10, 2, (80, 140, 220)), ("box", 14, 6, 2, 5, (100, 160, 240)), ("pixel", 4, 7, WHITE)],
+    "bloom_bass": [("box", 2, 6, 12, 5, (100, 220, 100)), ("box", 3, 5, 10, 2, (60, 180, 60)), ("box", 14, 6, 2, 5, (80, 200, 80)), ("pixel", 4, 7, WHITE)],
+    "solar_salmon": [("box", 2, 6, 12, 5, (255, 180, 80)), ("box", 3, 5, 10, 2, (200, 140, 50)), ("box", 14, 6, 2, 5, (220, 160, 60)), ("pixel", 4, 7, WHITE)],
+    "void_catfish": [("box", 2, 6, 12, 5, (80, 60, 120)), ("box", 3, 5, 10, 2, (50, 40, 80)), ("box", 14, 6, 2, 5, (60, 50, 100)), ("pixel", 4, 7, (200, 200, 200))],
+    "starlight_sturgeon": [("box", 2, 5, 14, 6, (200, 220, 255)), ("box", 3, 4, 12, 2, (160, 180, 220)), ("box", 16, 5, 2, 6, (180, 200, 240)), ("pixel", 5, 6, (80, 100, 160))],
+    "cosmic_koi": [("box", 2, 6, 12, 5, (255, 150, 200)), ("box", 3, 5, 10, 2, (200, 100, 160)), ("box", 14, 6, 2, 5, (220, 120, 180)), ("pixel", 4, 7, WHITE), ("pixel", 8, 7, (255, 200, 100))],
+    "hoe": [("box", 7, 2, 2, 12, (160, 140, 100)), ("box", 4, 10, 8, 4, (120, 120, 120))],
+    "water": [("box", 6, 2, 4, 12, (100, 150, 200)), ("box", 4, 4, 8, 4, (120, 120, 120))],
+    "scythe": [("box", 7, 2, 2, 12, (140, 120, 80)), ("box", 2, 2, 12, 3, (180, 180, 180))],
+    "starlight_egg": [("box", 4, 5, 8, 8, (200, 200, 180)), ("box", 5, 4, 6, 3, (220, 220, 200)), ("pixel", 6, 6, (180, 200, 255))],
+    "nebula_milk": [("box", 3, 4, 10, 10, (200, 200, 240)), ("box", 4, 3, 8, 2, (180, 180, 220)), ("box", 5, 2, 6, 2, (220, 220, 255))],
+    "cosmic_wool": [("box", 3, 4, 10, 10, (255, 200, 255)), ("box", 4, 3, 8, 8, (255, 220, 255)), ("box", 5, 2, 6, 3, (255, 180, 240))],
+}
 
 def get_crop_icon(crop_key):
     key = f"icon_{crop_key}"
     if key in SPRITE_CACHE:
         return SPRITE_CACHE[key]
     s = make_surface(16, 16)
-    color = CROP_TYPES[crop_key]["color"]
-    draw_box(s, 4, 8, 8, 8, color, True)
-    draw_box(s, 6, 4, 4, 6, (40, 180, 40), True)
-    draw_box(s, 7, 2, 2, 3, (40, 180, 40), True)
+    if crop_key in ICON_PIXEL_DATA:
+        for cmd in ICON_PIXEL_DATA[crop_key]:
+            if cmd[0] == "box":
+                _, x, y, w, h, color = cmd
+                draw_box(s, x, y, w, h, color, True)
+            elif cmd[0] == "pixel":
+                _, x, y, color = cmd
+                set_pixel(s, x, y, color)
+    else:
+        color = CROP_TYPES[crop_key]["color"]
+        draw_box(s, 4, 8, 8, 8, color, True)
+        draw_box(s, 6, 4, 4, 6, (40, 180, 40), True)
+        draw_box(s, 7, 2, 2, 3, (40, 180, 40), True)
     s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s
@@ -1162,19 +1449,18 @@ def get_item_icon(item_name):
     if key in SPRITE_CACHE:
         return SPRITE_CACHE[key]
     s = make_surface(16, 16)
-    if "seed" in item_name.lower() or "seeds" in item_name.lower():
+    if item_name.lower() in ICON_PIXEL_DATA:
+        for cmd in ICON_PIXEL_DATA[item_name.lower()]:
+            if cmd[0] == "box":
+                _, x, y, w, h, color = cmd
+                draw_box(s, x, y, w, h, color, True)
+            elif cmd[0] == "pixel":
+                _, x, y, color = cmd
+                set_pixel(s, x, y, color)
+    elif "seed" in item_name.lower() or "seeds" in item_name.lower():
         draw_box(s, 4, 6, 8, 8, (200, 180, 100), True)
         set_pixel(s, 7, 8, (100, 200, 100))
         set_pixel(s, 9, 10, (100, 200, 100))
-    elif "hoe" in item_name.lower():
-        draw_box(s, 7, 2, 2, 12, (160, 140, 100), True)
-        draw_box(s, 4, 10, 8, 4, (120, 120, 120), True)
-    elif "water" in item_name.lower():
-        draw_box(s, 6, 2, 4, 12, (100, 150, 200), True)
-        draw_box(s, 4, 4, 8, 4, (120, 120, 120), True)
-    elif "scythe" in item_name.lower():
-        draw_box(s, 7, 2, 2, 12, (140, 120, 80), True)
-        draw_box(s, 2, 2, 12, 3, (180, 180, 180), True)
     else:
         draw_box(s, 2, 2, 12, 12, PURPLE, True)
     s.set_colorkey(BLACK)
@@ -1229,18 +1515,99 @@ def get_bot_surf(bot_type):
     key = f"bot_{bot_type}"
     if key in SPRITE_CACHE:
         return SPRITE_CACHE[key]
-    from src.constants import BOT_TYPES
-    c = BOT_TYPES[bot_type]["color"]
-    s = make_surface(TILE_SIZE, TILE_SIZE)
-    draw_box(s, 6, 4, 20, 18, c, True)
-    draw_box(s, 8, 6, 16, 14, (c[0]//2, c[1]//2, c[2]//2), True)
-    set_pixel(s, 10, 4, WHITE)
-    set_pixel(s, 22, 4, WHITE)
-    set_pixel(s, 14, 8, c)
-    set_pixel(s, 18, 8, c)
-    draw_box(s, 10, 16, 12, 3, (c[0]//2, c[1]//2, c[2]//2), True)
-    draw_box(s, 11, 18, 4, 6, (60, 60, 80), True)
-    draw_box(s, 17, 18, 4, 6, (60, 60, 80), True)
+    sheet_32_path = os.path.join("assets", f"bot_{bot_type}_32.png")
+    if os.path.exists(sheet_32_path):
+        raw = pygame.image.load(sheet_32_path).convert_alpha()
+        s = scale_to_fill(raw, 32, 32)
+    else:
+        sheet_name = SHEET_BOT.get(bot_type)
+        if sheet_name and os.path.exists(os.path.join("assets", sheet_name)):
+            s = get_sheet_frame(sheet_name, 2, 0, 32, 32).copy()
+        else:
+            from src.constants import BOT_TYPES
+            c = BOT_TYPES[bot_type]["color"]
+            s = make_surface(TILE_SIZE, TILE_SIZE)
+            if bot_type == "water_bot":
+                draw_box(s, 6, 6, 20, 16, c, True)
+                draw_box(s, 7, 4, 18, 4, (c[0]//2, c[1]//2, c[2]//2), True)
+                draw_box(s, 12, 4, 8, 3, c, True)
+                set_pixel(s, 10, 4, WHITE)
+                set_pixel(s, 22, 4, WHITE)
+                draw_box(s, 9, 8, 14, 10, (c[0]//2, c[1]//2, c[2]//2), True)
+                set_pixel(s, 12, 10, WHITE)
+                set_pixel(s, 20, 10, WHITE)
+                draw_box(s, 13, 12, 6, 3, (60, 60, 80), True)
+                draw_box(s, 11, 20, 4, 4, (60, 60, 80), True)
+                draw_box(s, 17, 20, 4, 4, (60, 60, 80), True)
+                draw_box(s, 8, 22, 16, 3, (c[0]//2, c[1]//2, c[2]//2), True)
+            elif bot_type == "sprout_bot":
+                draw_box(s, 4, 8, 24, 14, c, True)
+                draw_box(s, 6, 6, 20, 4, (c[0]//2, c[1]//2, c[2]//2), True)
+                draw_box(s, 14, 2, 4, 6, (60, 200, 60), True)
+                draw_box(s, 13, 1, 6, 2, (80, 220, 80), True)
+                set_pixel(s, 12, 6, WHITE)
+                set_pixel(s, 20, 6, WHITE)
+                draw_box(s, 8, 10, 16, 10, (c[0]//2, c[1]//2, c[2]//2), True)
+                set_pixel(s, 12, 12, WHITE)
+                set_pixel(s, 20, 12, WHITE)
+                draw_box(s, 10, 20, 4, 4, (60, 60, 80), True)
+                draw_box(s, 18, 20, 4, 4, (60, 60, 80), True)
+                draw_box(s, 8, 22, 16, 3, (c[0]//2, c[1]//2, c[2]//2), True)
+            elif bot_type == "harvest_bot":
+                draw_box(s, 4, 4, 24, 20, c, True)
+                draw_box(s, 6, 6, 20, 16, (c[0]//2, c[1]//2, c[2]//2), True)
+                draw_box(s, 8, 8, 16, 12, (c[0]//3, c[1]//3, c[2]//3), True)
+                set_pixel(s, 10, 8, WHITE)
+                set_pixel(s, 14, 8, WHITE)
+                set_pixel(s, 18, 8, WHITE)
+                set_pixel(s, 22, 8, WHITE)
+                draw_box(s, 10, 12, 12, 4, (c[0]//2, c[1]//2, c[2]//2), True)
+                set_pixel(s, 14, 16, (255, 200, 100))
+                set_pixel(s, 16, 16, (255, 200, 100))
+                set_pixel(s, 18, 16, (255, 200, 100))
+                draw_box(s, 8, 22, 4, 4, (60, 60, 80), True)
+                draw_box(s, 16, 22, 4, 4, (60, 60, 80), True)
+                draw_box(s, 20, 22, 4, 4, (60, 60, 80), True)
+            elif bot_type == "mega_water_bot":
+                draw_box(s, 4, 4, 24, 20, c, True)
+                draw_box(s, 6, 6, 20, 16, (c[0]//2, c[1]//2, c[2]//2), True)
+                draw_box(s, 10, 2, 12, 4, c, True)
+                set_pixel(s, 10, 2, WHITE)
+                set_pixel(s, 22, 2, WHITE)
+                draw_box(s, 12, 8, 8, 10, (c[0]//3, c[1]//3, c[2]//3), True)
+                set_pixel(s, 10, 12, (100, 200, 255))
+                set_pixel(s, 22, 12, (100, 200, 255))
+                set_pixel(s, 14, 10, WHITE)
+                set_pixel(s, 18, 10, WHITE)
+                draw_box(s, 12, 20, 8, 2, (c[0]//2, c[1]//2, c[2]//2), True)
+                draw_box(s, 8, 22, 4, 4, (80, 80, 100), True)
+                draw_box(s, 14, 22, 4, 4, (80, 80, 100), True)
+                draw_box(s, 20, 22, 4, 4, (80, 80, 100), True)
+            elif bot_type == "mega_harvest_bot":
+                draw_box(s, 2, 4, 28, 20, c, True)
+                draw_box(s, 4, 6, 24, 16, (c[0]//2, c[1]//2, c[2]//2), True)
+                draw_box(s, 6, 8, 20, 12, (c[0]//3, c[1]//3, c[2]//3), True)
+                set_pixel(s, 8, 6, WHITE)
+                set_pixel(s, 12, 6, WHITE)
+                set_pixel(s, 16, 6, WHITE)
+                set_pixel(s, 20, 6, WHITE)
+                set_pixel(s, 24, 6, WHITE)
+                draw_box(s, 10, 10, 12, 6, (c[0]//2, c[1]//2, c[2]//2), True)
+                set_pixel(s, 14, 14, (255, 200, 100))
+                set_pixel(s, 18, 14, (255, 200, 100))
+                draw_box(s, 6, 22, 4, 4, (80, 80, 100), True)
+                draw_box(s, 12, 22, 4, 4, (80, 80, 100), True)
+                draw_box(s, 18, 22, 4, 4, (80, 80, 100), True)
+                draw_box(s, 24, 22, 4, 4, (80, 80, 100), True)
+            else:
+                draw_box(s, 6, 4, 20, 18, c, True)
+                draw_box(s, 8, 6, 16, 14, (c[0]//2, c[1]//2, c[2]//2), True)
+                set_pixel(s, 10, 4, WHITE)
+                set_pixel(s, 22, 4, WHITE)
+                set_pixel(s, 14, 8, c)
+                set_pixel(s, 18, 8, c)
+                draw_box(s, 12, 18, 4, 6, (60, 60, 80), True)
+                draw_box(s, 18, 18, 4, 6, (60, 60, 80), True)
     s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s
@@ -1249,15 +1616,37 @@ def get_ship_surf(tier):
     key = f"ship_{tier}"
     if key in SPRITE_CACHE:
         return SPRITE_CACHE[key]
-    colors = [(160, 180, 200), (200, 180, 120), (220, 200, 255)]
-    c = colors[min(tier, len(colors) - 1)]
     s = make_surface(TILE_SIZE, TILE_SIZE)
-    draw_box(s, 4, 12, 24, 8, c, True)
-    draw_box(s, 8, 8, 16, 6, (c[0]//2, c[1]//2, c[2]//2), True)
-    draw_box(s, 10, 4, 12, 6, c, True)
-    draw_box(s, 14, 0, 4, 6, (c[0]//2, c[1]//2, c[2]//2), True)
-    set_pixel(s, 12, 14, GOLD)
-    set_pixel(s, 20, 14, GOLD)
+    if tier == 0:
+        c = (160, 180, 200)
+        draw_box(s, 8, 16, 16, 6, c, True)
+        draw_box(s, 10, 12, 12, 6, (c[0]//2, c[1]//2, c[2]//2), True)
+        draw_box(s, 12, 8, 8, 6, c, True)
+        draw_box(s, 14, 6, 4, 4, (c[0]//2, c[1]//2, c[2]//2), True)
+        set_pixel(s, 14, 18, GOLD)
+    elif tier == 1:
+        c = (200, 180, 120)
+        draw_box(s, 6, 14, 20, 8, c, True)
+        draw_box(s, 8, 10, 16, 6, (c[0]//2, c[1]//2, c[2]//2), True)
+        draw_box(s, 10, 6, 12, 6, c, True)
+        draw_box(s, 14, 2, 4, 6, (c[0]//2, c[1]//2, c[2]//2), True)
+        draw_box(s, 4, 16, 24, 2, (c[0]//2, c[1]//2, c[2]//2), True)
+        set_pixel(s, 12, 16, GOLD)
+        set_pixel(s, 20, 16, GOLD)
+        set_pixel(s, 14, 18, (255, 100, 100))
+    else:
+        c = (220, 200, 255)
+        draw_box(s, 4, 12, 24, 10, c, True)
+        draw_box(s, 6, 8, 20, 6, (c[0]//2, c[1]//2, c[2]//2), True)
+        draw_box(s, 8, 4, 16, 6, c, True)
+        draw_box(s, 12, 0, 8, 6, (c[0]//2, c[1]//2, c[2]//2), True)
+        draw_box(s, 4, 16, 24, 2, (c[0]//2, c[1]//2, c[2]//2), True)
+        draw_box(s, 2, 18, 28, 2, (c[0]//3, c[1]//3, c[2]//3), True)
+        set_pixel(s, 14, 14, GOLD)
+        set_pixel(s, 18, 14, GOLD)
+        set_pixel(s, 24, 14, GOLD)
+        set_pixel(s, 12, 18, (100, 255, 100))
+        set_pixel(s, 20, 18, (100, 255, 100))
     s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s
@@ -1270,22 +1659,73 @@ def get_fish_surf(fish_id):
     c = FISH_TYPES[fish_id]["color"]
     dark = (c[0] // 2, c[1] // 2, c[2] // 2)
     s = make_surface(TILE_SIZE, TILE_SIZE)
-    # body (oval-ish)
-    draw_box(s, 8, 12, 14, 8, c, True)
-    draw_box(s, 6, 14, 2, 4, c, True)
-    draw_box(s, 22, 13, 2, 6, c, True)
-    # belly shading
-    draw_box(s, 9, 17, 12, 2, dark, True)
-    # tail fin
-    draw_box(s, 24, 11, 4, 4, c, True)
-    draw_box(s, 24, 17, 4, 4, c, True)
-    set_pixel(s, 27, 15, dark)
-    set_pixel(s, 27, 16, dark)
-    # top fin
-    draw_box(s, 12, 9, 6, 3, dark, True)
-    # eye
-    set_pixel(s, 10, 14, WHITE)
-    set_pixel(s, 11, 14, BLACK)
+    if fish_id == "nebula_trout":
+        draw_box(s, 8, 12, 14, 8, c, True)
+        draw_box(s, 9, 17, 12, 2, dark, True)
+        draw_box(s, 22, 11, 6, 10, c, True)
+        draw_box(s, 26, 12, 3, 3, c, True)
+        draw_box(s, 26, 17, 3, 3, c, True)
+        draw_box(s, 11, 9, 8, 3, dark, True)
+        set_pixel(s, 10, 14, WHITE)
+        set_pixel(s, 11, 14, BLACK)
+        for sp in range(3):
+            set_pixel(s, 14 + sp * 3, 15, (200, 220, 255))
+    elif fish_id == "bloom_bass":
+        draw_box(s, 7, 12, 16, 8, c, True)
+        draw_box(s, 8, 17, 14, 2, dark, True)
+        draw_box(s, 23, 11, 5, 10, c, True)
+        draw_box(s, 11, 9, 6, 3, dark, True)
+        set_pixel(s, 9, 14, WHITE)
+        set_pixel(s, 10, 14, BLACK)
+        draw_box(s, 12, 13, 6, 3, (40, 180, 40), True)
+    elif fish_id == "solar_salmon":
+        draw_box(s, 8, 11, 14, 9, c, True)
+        draw_box(s, 9, 17, 12, 2, dark, True)
+        draw_box(s, 22, 10, 6, 11, c, True)
+        draw_box(s, 26, 11, 3, 4, c, True)
+        draw_box(s, 26, 17, 3, 4, c, True)
+        draw_box(s, 12, 8, 6, 4, dark, True)
+        set_pixel(s, 10, 13, WHITE)
+        set_pixel(s, 11, 13, BLACK)
+        draw_box(s, 14, 14, 4, 3, (255, 200, 100), True)
+    elif fish_id == "void_catfish":
+        draw_box(s, 6, 13, 16, 7, c, True)
+        draw_box(s, 7, 17, 14, 2, dark, True)
+        draw_box(s, 22, 12, 6, 8, c, True)
+        draw_box(s, 12, 8, 4, 5, dark, True)
+        draw_box(s, 11, 7, 6, 2, (60, 50, 100), True)
+        set_pixel(s, 8, 14, (200, 200, 200))
+        set_pixel(s, 9, 14, (60, 60, 60))
+        draw_box(s, 4, 15, 2, 3, c, True)
+    elif fish_id == "starlight_sturgeon":
+        draw_box(s, 6, 11, 18, 9, c, True)
+        draw_box(s, 7, 17, 16, 2, dark, True)
+        draw_box(s, 24, 10, 6, 11, c, True)
+        draw_box(s, 28, 11, 3, 4, c, True)
+        draw_box(s, 28, 17, 3, 4, c, True)
+        draw_box(s, 10, 8, 10, 3, dark, True)
+        set_pixel(s, 8, 13, (100, 140, 200))
+        set_pixel(s, 9, 13, BLACK)
+        for sp in range(4):
+            set_pixel(s, 14 + sp * 3, 14, WHITE)
+    elif fish_id == "cosmic_koi":
+        draw_box(s, 8, 11, 14, 9, c, True)
+        draw_box(s, 9, 17, 12, 2, dark, True)
+        draw_box(s, 22, 11, 6, 9, c, True)
+        draw_box(s, 12, 8, 6, 3, dark, True)
+        set_pixel(s, 10, 13, WHITE)
+        set_pixel(s, 11, 13, BLACK)
+        draw_box(s, 12, 13, 6, 4, (255, 200, 100), True)
+        for sp in range(3):
+            set_pixel(s, 6 + sp * 2, 12 + sp, (255, 200, 255))
+            set_pixel(s, 6 + sp * 2, 16 - sp, (255, 200, 255))
+    else:
+        draw_box(s, 8, 12, 14, 8, c, True)
+        draw_box(s, 9, 17, 12, 2, dark, True)
+        draw_box(s, 22, 11, 6, 10, c, True)
+        draw_box(s, 12, 9, 6, 3, dark, True)
+        set_pixel(s, 10, 14, WHITE)
+        set_pixel(s, 11, 14, BLACK)
     s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s

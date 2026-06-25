@@ -32,6 +32,7 @@ def draw_dialogue():
 def draw_shop():
     if not game.shop_active:
         return
+    screen.blit(get_interior_surf("shop_interior"), (0, 0))
     draw_overlay_backdrop()
     panel_w, panel_h = 700, 450
     px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
@@ -48,7 +49,7 @@ def draw_shop():
         data = CROP_TYPES[crop_key]
         yy = py + 100 + i * 28
         # Buy column
-        icon = get_crop_icon(crop_key)
+        icon = get_item_icon(f"{crop_key}_seed")
         screen.blit(icon, (px + 20, yy + 2))
         draw_text(screen, f"{data['seed_name']} - {data['seed_price']}g", px + 40, yy + 4, WHITE, font_small)
         draw_text(screen, f"[{i+1}]", px + col_w - 40, yy + 4, GOLD, font_small)
@@ -71,6 +72,8 @@ def draw_shop():
         if count <= 0:
             continue
         yy = dish_y + 20 + di * 22
+        icon = get_item_icon(rk)
+        screen.blit(icon, (px + col_w + 20, yy))
         draw_text(screen, f"{name} x{count} - {recipe['sell_price']}g", px + col_w + 40, yy, WHITE, font_small)
         if di < len(dish_keys):
             draw_text(screen, f"[{dish_keys[di]}]", px + panel_w - 50, yy, ORANGE, font_small)
@@ -86,6 +89,8 @@ def draw_shop():
         if count <= 0:
             continue
         yy = artisan_y + 20 + ai * 22
+        icon = get_item_icon(rk)
+        screen.blit(icon, (px + col_w + 20, yy))
         draw_text(screen, f"{name} x{count} - {recipe['sell_price']}g", px + col_w + 40, yy, WHITE, font_small)
         if ai < len(artisan_keys):
             draw_text(screen, f"[{artisan_keys[ai]}]", px + panel_w - 50, yy, ORANGE, font_small)
@@ -101,6 +106,8 @@ def draw_shop():
             continue
         yy = fish_y + 20 + fi * 22
         f = FISH_TYPES[fid]
+        icon = get_item_icon(fid)
+        screen.blit(icon, (px + col_w + 20, yy))
         draw_text(screen, f"{f['name']} x{count} - {f['sell_price']}g", px + col_w + 40, yy, WHITE, font_small)
         if fi < len(fish_keys):
             draw_text(screen, f"[{fish_keys[fi]}]", px + panel_w - 50, yy, ORANGE, font_small)
@@ -111,10 +118,9 @@ def draw_shop():
 def draw_bar():
     if not game.bar_active:
         return
-    if game.player.current_map == "spaceport":
-        screen.blit(get_interior_surf("bar_interior"), (0, 0))
+    screen.blit(get_interior_surf("bar_interior"), (0, 0))
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-    overlay.set_alpha(200)
+    overlay.set_alpha(120)
     overlay.fill((0, 0, 20))
     screen.blit(overlay, (0, 0))
     panel_w, panel_h = 500, 350
@@ -163,7 +169,7 @@ def draw_hangar():
         return
     screen.blit(get_interior_surf("hangar_interior"), (0, 0))
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-    overlay.set_alpha(200)
+    overlay.set_alpha(120)
     overlay.fill((0, 0, 20))
     screen.blit(overlay, (0, 0))
     panel_w, panel_h = 650, 480
@@ -298,7 +304,7 @@ def draw_cooking():
         return
     screen.blit(get_interior_surf("kitchen"), (0, 0))
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-    overlay.set_alpha(200)
+    overlay.set_alpha(120)
     overlay.fill((0, 0, 20))
     screen.blit(overlay, (0, 0))
     panel_w, panel_h = 550, 440
@@ -317,10 +323,12 @@ def draw_cooking():
             continue
         pygame.draw.rect(screen, (30, 50, 30), (px + 20, yy, panel_w - 40, 60))
         pygame.draw.rect(screen, (60, 120, 60), (px + 20, yy, panel_w - 40, 60), 1)
-        draw_text(screen, recipe["name"], px + 40, yy + 6, WHITE, font_med)
+        icon = get_item_icon(rk)
+        screen.blit(icon, (px + 25, yy + 6))
+        draw_text(screen, recipe["name"], px + 48, yy + 6, WHITE, font_med)
         ings = ", ".join(f"{v}x {k}" for k, v in recipe["ingredients"].items())
-        draw_text(screen, ings, px + 40, yy + 26, LIGHT_GRAY, font_small)
-        draw_text(screen, f"+{recipe['energy']}E  Sell: {recipe['sell_price']}g", px + 40, yy + 44, GOLD, font_small)
+        draw_text(screen, ings, px + 48, yy + 26, LIGHT_GRAY, font_small)
+        draw_text(screen, f"+{recipe['energy']}E  Sell: {recipe['sell_price']}g", px + 48, yy + 44, GOLD, font_small)
         draw_text(screen, f"[{idx+1}]", px + panel_w - 60, yy + 12, GOLD, font_med)
         idx += 1
     if idx == 0:
@@ -332,7 +340,7 @@ def draw_crafting():
         return
     screen.blit(get_interior_surf("workshop"), (0, 0))
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-    overlay.set_alpha(200)
+    overlay.set_alpha(120)
     overlay.fill((0, 0, 20))
     screen.blit(overlay, (0, 0))
     panel_w, panel_h = 600, 500
@@ -350,9 +358,11 @@ def draw_crafting():
         pygame.draw.rect(screen, row_color, (px + 15, yy, panel_w - 30, 38))
         pygame.draw.rect(screen, (90, 70, 40), (px + 15, yy, panel_w - 30, 38), 1)
         name_color = WHITE if can_craft else LIGHT_GRAY
-        draw_text(screen, recipe["name"], px + 30, yy + 3, name_color, font_med)
+        icon = get_item_icon(rk)
+        screen.blit(icon, (px + 19, yy + 3))
+        draw_text(screen, recipe["name"], px + 42, yy + 3, name_color, font_med)
         ings = ", ".join(f"{game.player.inventory.get(k, 0)}/{v} {k}" for k, v in recipe["ingredients"].items())
-        draw_text(screen, ings, px + 30, yy + 21, LIGHT_GRAY, font_small)
+        draw_text(screen, ings, px + 42, yy + 21, LIGHT_GRAY, font_small)
         # Profit analysis: output price vs. sum of ingredient base sell prices
         in_val = 0
         for ing, need in recipe["ingredients"].items():
@@ -533,7 +543,7 @@ def draw_barn_overlay():
         return
     screen.blit(get_interior_surf("barn_interior"), (0, 0))
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-    overlay.set_alpha(200)
+    overlay.set_alpha(120)
     overlay.fill((0, 0, 20))
     screen.blit(overlay, (0, 0))
     panel_w, panel_h = 500, 400

@@ -66,9 +66,9 @@ def draw_farm():
             elif row < off_y:
                 screen.blit(get_tile_surf("grass"), (draw_x, draw_y))
 
+    screen.blit(get_prop_surf("lamp_post"), (6 * TILE_SIZE, 2 * TILE_SIZE))
     player_house = get_building_v2("player_house", game.anim_frame)
     screen.blit(player_house, (7 * TILE_SIZE, 0))
-    screen.blit(get_prop_surf("lamp_post"), (6 * TILE_SIZE, -1 * TILE_SIZE + 4))
 
     draw_text(screen, "Your Farm", 7 * TILE_SIZE + TILE_SIZE, -2, WHITE, font_small)
 
@@ -255,6 +255,17 @@ def draw_spaceport():
         screen.blit(get_tile_surf("path"), (8 * TILE_SIZE, py * TILE_SIZE))
         screen.blit(get_tile_surf("path"), (21 * TILE_SIZE, py * TILE_SIZE))
 
+    # Decorative props (drawn behind buildings)
+    screen.blit(get_prop_surf("lamp_post"), (8 * TILE_SIZE, 1 * TILE_SIZE))
+    screen.blit(get_prop_surf("lamp_post"), (21 * TILE_SIZE, 1 * TILE_SIZE))
+    screen.blit(get_prop_surf("bench"), (12 * TILE_SIZE, 1 * TILE_SIZE))
+    screen.blit(get_prop_surf("bench"), (18 * TILE_SIZE, 1 * TILE_SIZE))
+    screen.blit(get_prop_surf("planter"), (6 * TILE_SIZE, 6 * TILE_SIZE))
+    screen.blit(get_prop_surf("planter"), (23 * TILE_SIZE, 6 * TILE_SIZE))
+    screen.blit(get_prop_surf("crate"), (4 * TILE_SIZE, 5 * TILE_SIZE))
+    screen.blit(get_prop_surf("crate"), (25 * TILE_SIZE, 15 * TILE_SIZE))
+    screen.blit(get_prop_surf("signpost"), (14 * TILE_SIZE, 12 * TILE_SIZE))
+
     # Buildings with animated neon signs
     t = pygame.time.get_ticks()
     neon_glow = 0.5 + 0.5 * math.sin(t * 0.003)
@@ -292,16 +303,6 @@ def draw_spaceport():
         draw_box(door_surf, 0, 0, 8, 12, (100, 80, 60), True)
         draw_box(door_surf, 2, 0, 4, 12, (80, 60, 40), True)
         screen.blit(door_surf, (door_x, door_y))
-
-    # Decorative props
-    screen.blit(get_prop_surf("lamp_post"), (7 * TILE_SIZE, 1 * TILE_SIZE - 32))
-    screen.blit(get_prop_surf("lamp_post"), (22 * TILE_SIZE, 0 * TILE_SIZE - 32))
-    screen.blit(get_prop_surf("bench"), (12 * TILE_SIZE, 1 * TILE_SIZE))
-    screen.blit(get_prop_surf("bench"), (18 * TILE_SIZE, 1 * TILE_SIZE))
-    screen.blit(get_prop_surf("planter"), (6 * TILE_SIZE, 6 * TILE_SIZE))
-    screen.blit(get_prop_surf("planter"), (23 * TILE_SIZE, 6 * TILE_SIZE))
-    screen.blit(get_prop_surf("crate"), (4 * TILE_SIZE, 4 * TILE_SIZE))
-    screen.blit(get_prop_surf("crate"), (25 * TILE_SIZE, 15 * TILE_SIZE))
 
     # Quest board signpost (tile 6, 10)
     qb_x, qb_y = 6 * TILE_SIZE, 10 * TILE_SIZE
