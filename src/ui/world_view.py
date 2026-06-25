@@ -26,6 +26,7 @@ def draw_farm():
     off_y = game.farm_off_y
     f_cols = game.farm_cols
     f_rows = game.farm_rows
+    anim = game.anim_frame
     for row in range(ground_y // TILE_SIZE, FARM_TILES_Y):
         for col in range(FARM_TILES_X):
             draw_x = col * TILE_SIZE
@@ -34,6 +35,11 @@ def draw_farm():
                 tile = game.tiles[row - off_y][col - off_x]
                 if tile.soil_state == "watered":
                     screen.blit(get_tile_surf("watered"), (draw_x, draw_y))
+                    # Animated water shimmer
+                    shimmer = make_surface(TILE_SIZE, TILE_SIZE)
+                    shimmer.set_alpha(20 + anim * 10)
+                    shimmer.fill((80, 160, 255))
+                    screen.blit(shimmer, (draw_x, draw_y))
                 elif tile.soil_state == "tilled":
                     screen.blit(get_tile_surf("tilled"), (draw_x, draw_y))
                 else:
@@ -43,12 +49,15 @@ def draw_farm():
                     if data:
                         stages = data["growth_stages"]
                         cs = get_crop_surf(tile.crop_type, tile.crop_stage, stages)
-                        screen.blit(cs, (draw_x, draw_y))
+                        # Slight crop rustle animation
+                        rustle_y = 1 if anim == 0 else 0
+                        screen.blit(cs, (draw_x, draw_y + rustle_y))
                         if tile.watered:
                             wd = make_surface(TILE_SIZE, TILE_SIZE)
+                            wd.set_alpha(100)
                             for _ in range(3):
                                 wx, wy = random.randint(0, TILE_SIZE - 1), random.randint(0, TILE_SIZE - 1)
-                                set_pixel(wd, wx, wy, (150, 200, 255, 100))
+                                set_pixel(wd, wx, wy, (150, 200, 255))
                             screen.blit(wd, (draw_x, draw_y))
             elif row == off_y and (col < off_x or col >= off_x + f_cols):
                 screen.blit(get_tile_surf("grass"), (draw_x, draw_y))
@@ -57,8 +66,9 @@ def draw_farm():
             elif row < off_y:
                 screen.blit(get_tile_surf("grass"), (draw_x, draw_y))
 
-    player_house = get_building_surf("player_house")
+    player_house = get_building_v2("player_house", game.anim_frame)
     screen.blit(player_house, (7 * TILE_SIZE, 0))
+    screen.blit(get_prop_surf("lamp_post"), (6 * TILE_SIZE, -1 * TILE_SIZE + 4))
 
     draw_text(screen, "Your Farm", 7 * TILE_SIZE + TILE_SIZE, -2, WHITE, font_small)
 
@@ -103,7 +113,7 @@ def draw_farm():
     # Buildings on farm
     for b in game.buildings:
         bt = BUILDING_TYPES[b["type"]]
-        bs = get_building_surf(b["type"])
+        bs = get_building_v2(b["type"], game.anim_frame)
         bw, bh = bt["size"]
         screen.blit(bs, (b["tile_x"] * TILE_SIZE, b["tile_y"] * TILE_SIZE))
         draw_text(screen, bt["name"], b["tile_x"] * TILE_SIZE + bw * TILE_SIZE // 2,
@@ -158,7 +168,7 @@ def draw_farm():
         screen.blit(ghost, (px * TILE_SIZE, py * TILE_SIZE))
 
     # Draw player
-    player_surf = get_astronaut_surf(game.player.direction)
+    player_surf = get_astronaut_animated(game.player.direction, game.anim_state, game.player_anim_frame)
     screen.blit(player_surf, (game.player.x, game.player.y))
 
     # Tree decorations
@@ -245,30 +255,34 @@ def draw_spaceport():
         screen.blit(get_tile_surf("path"), (8 * TILE_SIZE, py * TILE_SIZE))
         screen.blit(get_tile_surf("path"), (21 * TILE_SIZE, py * TILE_SIZE))
 
-    # Buildings
-    shop_b = get_building_surf("shop")
+    # Buildings with animated neon signs
+    t = pygame.time.get_ticks()
+    neon_glow = 0.5 + 0.5 * math.sin(t * 0.003)
+    shop_b = get_building_v2("shop", game.anim_frame)
     screen.blit(shop_b, (8 * TILE_SIZE, 2 * TILE_SIZE))
     sign_y = 2 * TILE_SIZE - 28
     sign_cx = 11 * TILE_SIZE
     draw_box(screen, sign_cx - 60, sign_y, 120, 20, (60, 40, 80), True)
     draw_box(screen, sign_cx - 2, sign_y + 20, 4, 8, (80, 60, 100), True)
     draw_box(screen, sign_cx + 16, sign_y + 20, 4, 8, (80, 60, 100), True)
-    draw_box(screen, sign_cx - 60, sign_y, 120, 20, (140, 100, 180), 3)
+    border_bright = (int(140 + 60 * neon_glow), int(100 + 80 * neon_glow), int(180 + 40 * neon_glow))
+    draw_box(screen, sign_cx - 60, sign_y, 120, 20, border_bright, 3)
     draw_text(screen, "GENERAL STORE", sign_cx, sign_y + 10, GOLD, font_small, center=True)
 
-    bar_b = get_building_surf("bar")
+    bar_b = get_building_v2("bar", game.anim_frame)
     screen.blit(bar_b, (15 * TILE_SIZE, 2 * TILE_SIZE))
     sign_cx = 18 * TILE_SIZE
     draw_box(screen, sign_cx - 60, sign_y, 120, 20, (50, 20, 20), True)
     draw_box(screen, sign_cx - 2, sign_y + 20, 4, 8, (70, 30, 30), True)
     draw_box(screen, sign_cx + 16, sign_y + 20, 4, 8, (70, 30, 30), True)
-    draw_box(screen, sign_cx - 60, sign_y, 120, 20, (180, 80, 120), 2)
+    bar_border = (int(180 + 60 * neon_glow), int(80 + 40 * neon_glow), int(120 + 80 * neon_glow))
+    draw_box(screen, sign_cx - 60, sign_y, 120, 20, bar_border, 2)
     draw_text(screen, "COSMIC COMET", sign_cx, sign_y + 10, PINK, font_small, center=True)
 
     house_positions = [(5, 14), (9, 14), (19, 14), (25, 14)]
     house_labels = ["Nova's Home", "Pip's Home", "Luna's Home", "Rex's Home"]
     for i, (hx, hy) in enumerate(house_positions):
-        hb = get_building_surf("house")
+        hb = get_building_v2("house", game.anim_frame)
         screen.blit(hb, (hx * TILE_SIZE, hy * TILE_SIZE))
         draw_text(screen, house_labels[i], (hx + 1) * TILE_SIZE, (hy - 1) * TILE_SIZE, WHITE, font_small, center=True)
         # Door
@@ -278,6 +292,16 @@ def draw_spaceport():
         draw_box(door_surf, 0, 0, 8, 12, (100, 80, 60), True)
         draw_box(door_surf, 2, 0, 4, 12, (80, 60, 40), True)
         screen.blit(door_surf, (door_x, door_y))
+
+    # Decorative props
+    screen.blit(get_prop_surf("lamp_post"), (7 * TILE_SIZE, 1 * TILE_SIZE - 32))
+    screen.blit(get_prop_surf("lamp_post"), (22 * TILE_SIZE, 0 * TILE_SIZE - 32))
+    screen.blit(get_prop_surf("bench"), (12 * TILE_SIZE, 1 * TILE_SIZE))
+    screen.blit(get_prop_surf("bench"), (18 * TILE_SIZE, 1 * TILE_SIZE))
+    screen.blit(get_prop_surf("planter"), (6 * TILE_SIZE, 6 * TILE_SIZE))
+    screen.blit(get_prop_surf("planter"), (23 * TILE_SIZE, 6 * TILE_SIZE))
+    screen.blit(get_prop_surf("crate"), (4 * TILE_SIZE, 4 * TILE_SIZE))
+    screen.blit(get_prop_surf("crate"), (25 * TILE_SIZE, 15 * TILE_SIZE))
 
     # Quest board signpost (tile 6, 10)
     qb_x, qb_y = 6 * TILE_SIZE, 10 * TILE_SIZE
@@ -299,7 +323,7 @@ def draw_spaceport():
     # Traveling Merchant Cosmo (tile 5, 8) when visiting
     if game.merchant_present:
         cx, cy = 5 * TILE_SIZE, 8 * TILE_SIZE
-        cosmo = get_npc_surf("cosmo", (200, 160, 80), (120, 80, 40))
+        cosmo = get_npc_v2("cosmo", (200, 160, 80), (120, 80, 40))
         screen.blit(cosmo, (cx, cy - TILE_SIZE))
         draw_text(screen, "Cosmo (Merchant)", cx + TILE_SIZE // 2, cy - TILE_SIZE - 8, GOLD, font_small, center=True)
 
@@ -310,13 +334,32 @@ def draw_spaceport():
         pygame.draw.circle(screen, npc.color, (mx, my), 5)
         pygame.draw.circle(screen, WHITE, (mx, my), 5, 1)
 
-    # NPC Sprites
+    # NPC Sprites with nameplates + heart level
     for npc in game.npcs:
-        ns = get_npc_surf(npc.id, npc.color, npc.color2)
+        ns = get_npc_v2(npc.id, npc.color, npc.color2)
         nx = npc.tile_x * TILE_SIZE + int(npc.pixel_offset_x)
         ny = npc.tile_y * TILE_SIZE + int(npc.pixel_offset_y) - TILE_SIZE
         screen.blit(ns, (nx, ny))
-        draw_text(screen, npc.name, nx + TILE_SIZE // 2, ny - 8, WHITE, font_small, center=True)
+        # Nameplate background
+        name_w = len(npc.name) * 8 + 8
+        name_bg = pygame.Surface((name_w, 14))
+        name_bg.set_alpha(160)
+        name_bg.fill((10, 10, 30))
+        screen.blit(name_bg, (nx + TILE_SIZE // 2 - name_w // 2, ny - 8))
+        draw_text(screen, npc.name, nx + TILE_SIZE // 2, ny - 8, npc.color, font_small, center=True)
+        # Heart level indicator
+        if npc.heart_level > 0:
+            h_color = PINK if npc.heart_level >= 7 else RED if npc.heart_level >= 4 else (200, 100, 100)
+            heart_str = "♥" * min(npc.heart_level, 5) + ("+" if npc.heart_level > 5 else "")
+            draw_text(screen, heart_str, nx + TILE_SIZE // 2, ny + TILE_SIZE - 4, h_color, font_tiny, center=True)
+
+    # Floating space dust particles
+    t = pygame.time.get_ticks()
+    for i in range(12):
+        dx = (int(t * 0.02 + i * 137) % (SPACEPORT_TILES_X * TILE_SIZE))
+        dy = (int(t * 0.01 + i * 89) % (SPACEPORT_TILES_Y * TILE_SIZE))
+        brightness = 128 + int(64 * math.sin(t * 0.003 + i))
+        screen.set_at((dx, dy), (brightness, brightness, brightness + 40))
 
     # Alien decorations
     for ax, ay in [(3, 10), (10, 16), (23, 3), (28, 16), (2, 18)]:
@@ -341,5 +384,5 @@ def draw_spaceport():
         screen.blit(hl, (ftx * TILE_SIZE, fty * TILE_SIZE))
 
     # Player
-    player_surf = get_astronaut_surf(game.player.direction)
+    player_surf = get_astronaut_animated(game.player.direction, game.anim_state, game.player_anim_frame)
     screen.blit(player_surf, (game.player.x, game.player.y))

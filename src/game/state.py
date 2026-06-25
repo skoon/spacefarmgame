@@ -116,6 +116,20 @@ class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, Ki
         self.merchant_shop_active = False
         self.merchant_items = []
         self.merchant_last_visit = -1
+        # Screen effects (M15)
+        self.screen_shake = 0
+        self.screen_shake_intensity = 0
+        self.screen_flash = 0
+        self.screen_flash_color = (255, 255, 255)
+        self.overlay_alpha = 0
+        self.overlay_target_alpha = 0
+        self.anim_frame = 0
+        self.anim_timer = 0
+        # Player animation state (M16)
+        self.anim_state = "idle"
+        self.player_anim_frame = 0
+        self.player_anim_timer = 0
+        self.tool_use_timer = 0
 
     def set_message(self, msg):
         self.message = msg

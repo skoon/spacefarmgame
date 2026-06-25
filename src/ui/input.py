@@ -433,6 +433,9 @@ def handle_global_keydown(event):
         if game.player.selected_tool <= 2:
             if game.player.energy > 0:
                 game.use_tool()
+                game.anim_state = "tool"
+                game.player_anim_frame = game.player.selected_tool
+                game.tool_use_timer = 10
             else:
                 game.set_message("Too exhausted! Sleep to recover energy.")
     elif event.key == pygame.K_4:
@@ -503,7 +506,11 @@ def handle_movement():
     keys = pygame.key.get_pressed()
     if _movement_blocked():
         return
+    # Don't override animation during tool pose
+    if game.tool_use_timer > 0:
+        return
     dx, dy = 0, 0
+    game.anim_state = "idle"
     if keys[pygame.K_w] or keys[pygame.K_UP]:
         dy = -1
         game.player.direction = "up"
@@ -518,6 +525,7 @@ def handle_movement():
         game.player.direction = "right"
 
     if dx or dy:
+        game.anim_state = "walk"
         speed = game.player.speed
         margin = 4
         tile_size = TILE_SIZE

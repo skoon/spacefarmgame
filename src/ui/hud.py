@@ -1,3 +1,4 @@
+import math
 from src.ui.context import *
 
 def draw_toolbar():
@@ -111,11 +112,31 @@ def draw_particles():
     for p in game.particles:
         alpha = int(255 * p["life"] / max(p["max_life"], 1))
         size = p["size"]
-        s = pygame.Surface((size, size))
-        s.set_alpha(alpha)
+        px, py = int(p["x"]), int(p["y"])
         c = p["color"]
-        s.fill(c)
-        screen.blit(s, (int(p["x"]), int(p["y"])))
+        ptype = p.get("type", "default")
+        if ptype == "sparkle":
+            points = []
+            for i in range(4):
+                a = p.get("angle", 0) + i * 3.1416 / 2
+                r = size
+                points.append((px + int(math.cos(a) * r), py + int(math.sin(a) * r)))
+            if len(points) == 4:
+                pygame.draw.line(screen, c, points[0], points[2])
+                pygame.draw.line(screen, c, points[1], points[3])
+        elif ptype == "leaf":
+            s = pygame.Surface((size * 2, size), pygame.SRCALPHA)
+            pygame.draw.ellipse(s, (*c, alpha), (0, 0, size * 2, size))
+            screen.blit(s, (px - size, py - size // 2))
+        elif ptype == "confetti":
+            s = pygame.Surface((size * 2, size), pygame.SRCALPHA)
+            s.fill((*c, alpha))
+            screen.blit(s, (px - size, py - size // 2))
+        else:
+            s = pygame.Surface((size, size))
+            s.set_alpha(alpha)
+            s.fill(c)
+            screen.blit(s, (px, py))
 
 def draw_weather_particles():
     for p in game.weather_particles:

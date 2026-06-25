@@ -3,10 +3,7 @@ from src.ui.context import *
 def draw_help():
     if not game.help_active:
         return
-    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-    overlay.set_alpha(180)
-    overlay.fill((0, 0, 20))
-    screen.blit(overlay, (0, 0))
+    draw_overlay_backdrop()
     panel_w, panel_h = 720, 440
     px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
     pygame.draw.rect(screen, (10, 10, 30), (px, py, panel_w, panel_h))
@@ -78,10 +75,7 @@ def draw_help():
 def draw_save_menu():
     if not game.save_menu_active:
         return
-    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-    overlay.set_alpha(200)
-    overlay.fill((0, 0, 20))
-    screen.blit(overlay, (0, 0))
+    draw_overlay_backdrop()
     panel_w, panel_h = 550, 380
     px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
     pygame.draw.rect(screen, (10, 10, 30), (px, py, panel_w, panel_h))
@@ -111,10 +105,7 @@ def draw_save_menu():
 def draw_skills():
     if not game.skills_active:
         return
-    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-    overlay.set_alpha(200)
-    overlay.fill((0, 0, 20))
-    screen.blit(overlay, (0, 0))
+    draw_overlay_backdrop()
     panel_w, panel_h = 420, 340
     px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
     pygame.draw.rect(screen, (10, 20, 30), (px, py, panel_w, panel_h))

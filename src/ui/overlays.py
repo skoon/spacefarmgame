@@ -32,10 +32,7 @@ def draw_dialogue():
 def draw_shop():
     if not game.shop_active:
         return
-    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-    overlay.set_alpha(200)
-    overlay.fill((0, 0, 20))
-    screen.blit(overlay, (0, 0))
+    draw_overlay_backdrop()
     panel_w, panel_h = 700, 450
     px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
     pygame.draw.rect(screen, (20, 10, 40), (px, py, panel_w, panel_h))
@@ -114,6 +111,8 @@ def draw_shop():
 def draw_bar():
     if not game.bar_active:
         return
+    if game.player.current_map == "spaceport":
+        screen.blit(get_interior_surf("bar_interior"), (0, 0))
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
     overlay.set_alpha(200)
     overlay.fill((0, 0, 20))
@@ -162,6 +161,7 @@ def draw_bot_shop():
 def draw_hangar():
     if not game.hangar_active:
         return
+    screen.blit(get_interior_surf("hangar_interior"), (0, 0))
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
     overlay.set_alpha(200)
     overlay.fill((0, 0, 20))
@@ -230,10 +230,7 @@ def draw_planet_explore():
 def draw_inventory():
     if not game.inventory_active:
         return
-    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-    overlay.set_alpha(200)
-    overlay.fill((0, 0, 20))
-    screen.blit(overlay, (0, 0))
+    draw_overlay_backdrop()
     panel_w, panel_h = 500, 400
     px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
     pygame.draw.rect(screen, (10, 20, 30), (px, py, panel_w, panel_h))
@@ -252,10 +249,7 @@ def draw_inventory():
 def draw_seed_select():
     if not game.seed_select_active:
         return
-    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-    overlay.set_alpha(180)
-    overlay.fill((0, 0, 20))
-    screen.blit(overlay, (0, 0))
+    draw_overlay_backdrop()
     panel_w, panel_h = 440, 420
     px, py = (SCREEN_WIDTH - panel_w) // 2, (SCREEN_HEIGHT - panel_h) // 2
     pygame.draw.rect(screen, (10, 20, 30), (px, py, panel_w, panel_h))
@@ -302,6 +296,7 @@ def draw_seed_select():
 def draw_cooking():
     if not game.cooking_active:
         return
+    screen.blit(get_interior_surf("kitchen"), (0, 0))
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
     overlay.set_alpha(200)
     overlay.fill((0, 0, 20))
@@ -335,6 +330,7 @@ def draw_cooking():
 def draw_crafting():
     if not game.crafting_active:
         return
+    screen.blit(get_interior_surf("workshop"), (0, 0))
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
     overlay.set_alpha(200)
     overlay.fill((0, 0, 20))
@@ -535,6 +531,7 @@ def draw_pet_shop():
 def draw_barn_overlay():
     if not game.barn_overlay_active:
         return
+    screen.blit(get_interior_surf("barn_interior"), (0, 0))
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
     overlay.set_alpha(200)
     overlay.fill((0, 0, 20))

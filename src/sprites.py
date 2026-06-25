@@ -1,8 +1,189 @@
 import pygame
 import random
+import math
 from src.constants import *
 
 SPRITE_CACHE = {}
+
+# === 16-bit Palette System (M15) ===
+PALETTE = {
+    "skin": [(255, 200, 170), (235, 180, 150), (200, 150, 120)],
+    "suit_white": [(240, 242, 245), (210, 215, 220), (180, 185, 190)],
+    "visor_blue": [(80, 200, 255), (50, 160, 220), (20, 100, 180)],
+    "metal_gray": [(200, 200, 200), (160, 160, 160), (120, 120, 120)],
+    "suit_brown": [(120, 80, 40), (100, 65, 35), (80, 50, 25)],
+    "grass_green": [(50, 130, 50), (60, 140, 60), (70, 150, 70), (40, 180, 40)],
+    "soil_brown": [(100, 68, 40), (90, 58, 30), (80, 48, 20)],
+    "water_blue": [(60, 100, 180), (50, 80, 140), (100, 150, 255)],
+    "helmet_light": [(180, 200, 220), (160, 180, 200), (200, 200, 220)],
+    "crop_green": [(40, 180, 40), (60, 200, 60), (30, 150, 30)],
+}
+
+def blit_sprite(surf, pixels, x, y, palette_map, shade=0):
+    for row_idx, row in enumerate(pixels):
+        for col_idx, ch in enumerate(row):
+            if ch == ' ':
+                continue
+            color_key = palette_map.get(ch)
+            if color_key:
+                colors = PALETTE.get(color_key)
+                if colors:
+                    idx = min(shade, len(colors) - 1)
+                    c = colors[idx]
+                    surf.set_at((x + col_idx, y + row_idx), c)
+
+# === Player Animation System (M16) ===
+
+_ASTRO_PM = {
+    'W': "suit_white", 'B': "visor_blue", 'Y': "helmet_light",
+    'R': "suit_brown", 'G': "metal_gray", 'S': "skin",
+}
+
+_ASTRO_BASE = {
+    "down": [
+        "    WWWW    ",
+        "   WBBBBW   ",
+        "  WBBBBBBW  ",
+        "  WBYBBYBW  ",
+        "  WBBBBBBW  ",
+        "   WBBBBW   ",
+        "    WWWW    ",
+        "   WWWWWW   ",
+        "   WGGGGW   ",
+        "  WWRRRRWW  ",
+        "  W  WW  W  ",
+    ],
+    "up": [
+        "    WWWW    ",
+        "   WBBBBW   ",
+        "  WBYBBYBW  ",
+        "  WBBBBBBW  ",
+        "   WBBBBW   ",
+        "    WWWW    ",
+        "   WWWWWW   ",
+        "   WGGGGW   ",
+        "  WWRRRRWW  ",
+        "  W  WW  W  ",
+    ],
+    "left": [
+        "   WWWW    ",
+        "  WBBBBW   ",
+        " WBBBBBBW  ",
+        " WBYBBYBW  ",
+        " WBBBBBBW  ",
+        "  WBBBBW   ",
+        "   WWWW    ",
+        "  WWWWWW   ",
+        "  WGGGGW   ",
+        " WWRRRRWW  ",
+        " W  WW  W  ",
+    ],
+    "right": [
+        "    WWWW   ",
+        "   WBBBBW  ",
+        "  WBBBBBBW ",
+        "  WBYBBYBW ",
+        "  WBBBBBBW ",
+        "   WBBBBW  ",
+        "    WWWW   ",
+        "   WWWWWW  ",
+        "   WGGGGW  ",
+        "  WWRRRRWW ",
+        "  W  WW  W ",
+    ],
+}
+
+# Walk stride overrides: {direction: {row_index: new_row_string, ...}}
+_ASTRO_WALK_STRIDE = {
+    "down":  {7: "  WWWWWWWW  ", 9: "  WWR  RWW  "},
+    "up":    {6: "  WWWWWWWW  ", 8: "  WWR  RWW  "},
+    "left":  {7: " WWWWWWWW  ", 9: " WWR  RWW  "},
+    "right": {7: "  WWWWWWWW ", 9: "  WWR  RWW "},
+}
+
+# Tool pixel additions: {tool_index: {direction: [(x, y, char), ...]}}
+_ASTRO_TOOL_PIXELS = {
+    0: {  # hoe
+        "down":  [(11, 7, 'R'), (11, 8, 'R'), (12, 8, 'R'), (12, 9, 'R')],
+        "up":    [(11, 6, 'R'), (11, 7, 'R'), (12, 7, 'R'), (12, 8, 'R')],
+        "left":  [(0, 6, 'R'), (0, 7, 'R'), (1, 7, 'R'), (1, 8, 'R')],
+        "right": [(11, 6, 'R'), (11, 7, 'R'), (10, 7, 'R'), (10, 8, 'R')],
+    },
+    1: {  # watering can
+        "down":  [(10, 6, 'B'), (11, 6, 'B'), (10, 7, 'B'), (11, 7, 'B'), (12, 7, 'B')],
+        "up":    [(10, 5, 'B'), (11, 5, 'B'), (10, 6, 'B'), (11, 6, 'B'), (12, 6, 'B')],
+        "left":  [(0, 5, 'B'), (1, 5, 'B'), (0, 6, 'B'), (1, 6, 'B'), (2, 6, 'B')],
+        "right": [(10, 5, 'B'), (9, 5, 'B'), (10, 6, 'B'), (9, 6, 'B'), (8, 6, 'B')],
+    },
+    2: {  # scythe
+        "down":  [(10, 5, 'G'), (11, 5, 'G'), (11, 6, 'G'), (12, 6, 'G'), (13, 6, 'G')],
+        "up":    [(10, 4, 'G'), (11, 4, 'G'), (11, 5, 'G'), (12, 5, 'G'), (13, 5, 'G')],
+        "left":  [(0, 4, 'G'), (1, 4, 'G'), (1, 5, 'G'), (2, 5, 'G'), (3, 5, 'G')],
+        "right": [(10, 4, 'G'), (9, 4, 'G'), (9, 5, 'G'), (8, 5, 'G'), (7, 5, 'G')],
+    },
+}
+
+def _build_astro_surf(direction, state, frame):
+    base = list(_ASTRO_BASE[direction])
+    pm = _ASTRO_PM
+
+    if state == "walk" and frame == 1:
+        # Apply stride overrides
+        overrides = _ASTRO_WALK_STRIDE.get(direction, {})
+        for row_idx, new_row in overrides.items():
+            if row_idx < len(base):
+                base[row_idx] = new_row
+
+    elif state == "idle" and frame == 1:
+        # Blink: remove visor shine (Y -> B)
+        for i in range(len(base)):
+            if 'Y' in base[i]:
+                base[i] = base[i].replace('Y', 'B')
+                break
+
+    elif state == "tool":
+        # Tool index is passed as frame
+        tool_idx = frame
+        tool_px = _ASTRO_TOOL_PIXELS.get(tool_idx, {}).get(direction, [])
+        for x, y, ch in tool_px:
+            color_key = pm.get(ch)
+            if color_key:
+                row = list(base[y]) if y < len(base) else []
+                while len(row) <= x:
+                    row.append(' ')
+                row[x] = ch
+                base[y] = ''.join(row)
+
+    key = f"astro_{state}_{direction}_{frame}"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
+
+    s = make_surface(TILE_SIZE, TILE_SIZE)
+    # Determine max row length for centering
+    max_w = max(len(r) for r in base)
+    h = len(base)
+    ox = (TILE_SIZE - max_w * 2) // 2
+    oy = (TILE_SIZE - h * 2) // 2
+    for dy, row in enumerate(base):
+        for dx, ch in enumerate(row):
+            c = pm.get(ch)
+            if c:
+                colors = PALETTE[c]
+                color = colors[0]
+                sx, sy = ox + dx * 2, oy + dy * 2
+                s.set_at((sx, sy), color)
+                s.set_at((sx + 1, sy), color)
+                s.set_at((sx, sy + 1), color)
+                s.set_at((sx + 1, sy + 1), color)
+    s.set_colorkey(BLACK)
+    SPRITE_CACHE[key] = s
+    return s
+
+def get_astronaut_animated(direction="down", state="idle", frame=0):
+    return _build_astro_surf(direction, state, frame)
+
+def get_astronaut_v2(direction="down"):
+    return get_astronaut_animated(direction, "idle", 0)
 
 def make_surface(w, h, color=None):
     s = pygame.Surface((w, h), pygame.SRCALPHA)
@@ -121,26 +302,177 @@ def get_npc_surf(npc_id, color1, color2):
     key = f"npc_{npc_id}"
     if key in SPRITE_CACHE:
         return SPRITE_CACHE[key]
+    s = get_npc_v2(npc_id, color1, color2)
+    SPRITE_CACHE[key] = s
+    return s
+
+def get_npc_v2(npc_id, color1, color2, direction="down", frame=0):
+    key = f"npcv2_{npc_id}_{direction}_{frame}"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
     s = make_surface(TILE_SIZE, TILE_SIZE * 2)
-    # Simple alien body
-    draw_box(s, 6, 24, 8, 8, (60, 60, 80), True)
-    draw_box(s, 18, 24, 8, 8, (60, 60, 80), True)
-    draw_box(s, 4, 10, 24, 16, color1, True)
-    draw_box(s, 4, 22, 24, 3, color2, True)
-    # Head
-    draw_box(s, 6, 0, 20, 12, color1, True)
-    # Eyes
-    draw_box(s, 10, 3, 4, 4, WHITE, True)
-    draw_box(s, 18, 3, 4, 4, WHITE, True)
-    set_pixel(s, 12, 5, BLACK)
-    set_pixel(s, 20, 5, BLACK)
-    # Mouth
-    draw_box(s, 13, 8, 6, 2, color2, True)
-    # Antennae
-    set_pixel(s, 8, 0, color2)
-    set_pixel(s, 24, 0, color2)
-    set_pixel(s, 9, 0, color2)
-    set_pixel(s, 23, 0, color2)
+    c1, c2 = color1, color2
+    dark = tuple(max(0, x - 60) for x in c1)
+    light = tuple(min(255, x + 40) for x in c1)
+    skin = (255, 200, 170)
+    eye_w = (220, 220, 240)
+    eye_p = (40, 40, 60)
+
+    if npc_id == "zara":
+        # Zenorian shopkeeper — apron, antennae
+        hline(s, 10, 0, 4, c2)
+        hline(s, 11, 1, 2, c2)
+        draw_box(s, 6, 2, 20, 10, c1, True)
+        draw_box(s, 8, 4, 4, 3, eye_w, True)
+        draw_box(s, 18, 4, 4, 3, eye_w, True)
+        set_pixel(s, 10, 5, eye_p)
+        set_pixel(s, 20, 5, eye_p)
+        set_pixel(s, 14, 8, c2)
+        draw_box(s, 4, 12, 24, 14, c1, True)
+        draw_box(s, 4, 13, 24, 3, c2, True)
+        draw_box(s, 8, 16, 16, 4, light, True)
+        draw_box(s, 8, 20, 16, 1, c2, True)
+        draw_box(s, 8, 22, 4, 4, c2, True)
+        draw_box(s, 20, 22, 4, 4, c2, True)
+        draw_box(s, 10, 22, 4, 4, dark, True)
+        draw_box(s, 18, 22, 4, 4, dark, True)
+        draw_box(s, 10, 26, 12, 6, c1, True)
+        draw_box(s, 12, 26, 8, 6, dark, True)
+        draw_box(s, 10, 30, 12, 2, c2, True)
+
+    elif npc_id == "blip":
+        # Floatan bartender — jellyfish bell, floating
+        draw_box(s, 4, 12, 24, 4, c1, True)
+        draw_box(s, 2, 16, 28, 10, c1, True)
+        draw_box(s, 4, 26, 24, 6, light, True)
+        draw_box(s, 8, 4, 16, 8, c1, True)
+        draw_box(s, 10, 6, 4, 3, eye_w, True)
+        draw_box(s, 18, 6, 4, 3, eye_w, True)
+        set_pixel(s, 12, 7, eye_p)
+        set_pixel(s, 20, 7, eye_p)
+        hline(s, 13, 10, 6, c2)
+        # Tendrils
+        for i in range(3):
+            set_pixel(s, 6 + i * 8, 32, light)
+            set_pixel(s, 8 + i * 6, 33, c2)
+            set_pixel(s, 7 + i * 8, 34, light)
+
+    elif npc_id == "nova":
+        # Lunari pilot — tall, flowing hair, jacket
+        draw_box(s, 8, 6, 16, 6, skin, True)
+        draw_box(s, 6, 0, 20, 8, c2, True)
+        draw_box(s, 10, 8, 4, 3, eye_w, True)
+        draw_box(s, 18, 8, 4, 3, eye_w, True)
+        set_pixel(s, 12, 9, eye_p)
+        set_pixel(s, 20, 9, eye_p)
+        draw_box(s, 10, 12, 12, 2, skin, True)
+        draw_box(s, 4, 14, 24, 14, c1, True)
+        draw_box(s, 4, 14, 24, 2, light, True)
+        draw_box(s, 16, 14, 8, 6, c2, True)
+        draw_box(s, 6, 28, 20, 4, dark, True)
+        draw_box(s, 10, 28, 4, 4, dark, True)
+        draw_box(s, 18, 28, 4, 4, dark, True)
+        draw_box(s, 12, 32, 8, 2, (80, 80, 100), True)
+
+    elif npc_id == "pip":
+        # Spriggan helper — small, leafy
+        draw_box(s, 8, 2, 16, 8, skin, True)
+        set_pixel(s, 12, 0, c2)
+        set_pixel(s, 16, 0, c2)
+        set_pixel(s, 14, 1, c2)
+        draw_box(s, 10, 4, 3, 2, eye_w, True)
+        draw_box(s, 18, 4, 3, 2, eye_w, True)
+        set_pixel(s, 12, 5, eye_p)
+        set_pixel(s, 20, 5, eye_p)
+        hline(s, 13, 8, 6, c2)
+        draw_box(s, 6, 10, 20, 12, c1, True)
+        draw_box(s, 8, 22, 16, 6, dark, True)
+        draw_box(s, 10, 22, 4, 4, (80, 120, 80), True)
+        draw_box(s, 18, 22, 4, 4, (80, 120, 80), True)
+        draw_box(s, 12, 28, 8, 4, dark, True)
+
+    elif npc_id == "luna":
+        # Ethereal mystic — flowing robes
+        draw_box(s, 8, 2, 16, 8, skin, True)
+        draw_box(s, 6, 0, 20, 4, c2, True)
+        draw_box(s, 10, 4, 4, 3, eye_w, True)
+        draw_box(s, 18, 4, 4, 3, eye_w, True)
+        set_pixel(s, 12, 5, eye_p)
+        set_pixel(s, 20, 5, eye_p)
+        hline(s, 14, 8, 4, (200, 100, 150))
+        draw_box(s, 2, 10, 28, 18, c1, True)
+        draw_box(s, 4, 10, 24, 2, light, True)
+        draw_box(s, 12, 14, 8, 2, light, True)
+        draw_box(s, 6, 28, 20, 4, dark, True)
+        draw_box(s, 10, 28, 12, 4, c2, True)
+        draw_box(s, 6, 32, 20, 2, (100, 80, 120), True)
+
+    elif npc_id == "rex":
+        # Terrus farmer — hat, beard, stocky
+        draw_box(s, 6, 0, 20, 6, (160, 120, 60), True)
+        draw_box(s, 4, 2, 24, 3, (120, 80, 40), True)
+        draw_box(s, 8, 6, 16, 8, skin, True)
+        draw_box(s, 10, 8, 4, 3, eye_w, True)
+        draw_box(s, 18, 8, 4, 3, eye_w, True)
+        set_pixel(s, 12, 9, eye_p)
+        set_pixel(s, 20, 9, eye_p)
+        draw_box(s, 10, 12, 12, 6, c2, True)
+        draw_box(s, 4, 14, 24, 16, c1, True)
+        draw_box(s, 4, 14, 24, 2, light, True)
+        draw_box(s, 16, 14, 8, 4, c2, True)
+        draw_box(s, 8, 30, 16, 4, dark, True)
+        draw_box(s, 10, 30, 4, 4, (60, 40, 20), True)
+        draw_box(s, 18, 30, 4, 4, (60, 40, 20), True)
+        draw_box(s, 10, 34, 12, 2, (60, 40, 20), True)
+
+    elif npc_id == "zoop":
+        # Fuzzian pet shop — round, fluffy, bowtie
+        draw_box(s, 4, 2, 24, 10, light, True)
+        draw_box(s, 6, 4, 20, 8, c1, True)
+        draw_box(s, 8, 5, 16, 6, c1, True)
+        set_pixel(s, 10, 6, eye_w)
+        set_pixel(s, 14, 6, eye_w)
+        set_pixel(s, 18, 6, eye_w)
+        set_pixel(s, 22, 6, eye_w)
+        set_pixel(s, 11, 7, eye_p)
+        set_pixel(s, 15, 7, eye_p)
+        set_pixel(s, 19, 7, eye_p)
+        set_pixel(s, 23, 7, eye_p)
+        set_pixel(s, 14, 9, (255, 150, 150))
+        set_pixel(s, 18, 9, (255, 150, 150))
+        # Bowtie
+        draw_box(s, 12, 12, 8, 4, c2, True)
+        set_pixel(s, 10, 13, c2)
+        set_pixel(s, 22, 13, c2)
+        # Fluffy body
+        draw_box(s, 4, 14, 24, 14, light, True)
+        draw_box(s, 6, 16, 20, 10, c1, True)
+        for i in range(6):
+            px = 4 + i * 4 + (i % 2) * 2
+            set_pixel(s, px, 14, (255, 200, 220))
+            set_pixel(s, px, 15, (255, 200, 220))
+            set_pixel(s, px, 27, (255, 200, 220))
+            set_pixel(s, px, 28, (255, 200, 220))
+        draw_box(s, 10, 28, 12, 4, dark, True)
+        draw_box(s, 12, 32, 8, 2, (80, 80, 100), True)
+
+    else:
+        # Fallback — generic alien
+        draw_box(s, 6, 24, 8, 8, (60, 60, 80), True)
+        draw_box(s, 18, 24, 8, 8, (60, 60, 80), True)
+        draw_box(s, 4, 10, 24, 16, color1, True)
+        draw_box(s, 4, 22, 24, 3, color2, True)
+        draw_box(s, 6, 0, 20, 12, color1, True)
+        draw_box(s, 10, 3, 4, 4, WHITE, True)
+        draw_box(s, 18, 3, 4, 4, WHITE, True)
+        set_pixel(s, 12, 5, BLACK)
+        set_pixel(s, 20, 5, BLACK)
+        draw_box(s, 13, 8, 6, 2, color2, True)
+        set_pixel(s, 8, 0, color2)
+        set_pixel(s, 24, 0, color2)
+        set_pixel(s, 9, 0, color2)
+        set_pixel(s, 23, 0, color2)
+
     s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s
@@ -229,6 +561,93 @@ def get_crop_surf(crop_key, stage, total_stages):
         set_pixel(s, center_x - 3, base_y - h - 3, YELLOW)
         set_pixel(s, center_x + 3, base_y - h - 3, YELLOW)
         set_pixel(s, center_x - 1, base_y - h - 1, YELLOW)
+    s.set_colorkey(BLACK)
+    SPRITE_CACHE[key] = s
+    return s
+
+def get_building_v2(building_type, anim_frame=0):
+    base = get_building_surf(building_type)
+    key = f"buildingv2_{building_type}_{anim_frame}"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
+    s = base.copy()
+    bw, bh = BUILDING_TYPES.get(building_type, {}).get("size", (3, 3))
+    w, h = bw * TILE_SIZE, bh * TILE_SIZE
+
+    if building_type == "shop":
+        # Chimney smoke
+        if anim_frame % 2 == 0:
+            smoke_y = 4 + (anim_frame // 2) % 6
+            smoke_x = 12 + (anim_frame // 2) * 3
+            set_pixel(s, smoke_x, smoke_y, (200, 200, 200, 120))
+        # Window glow at night / idle
+        glow_bright = 180 + int(75 * math.sin(anim_frame * 0.5))
+        for gx in [16, 26, 64, 78]:
+            for gy in [36, 44, 52]:
+                set_pixel(s, gx, gy, (glow_bright, glow_bright, 255))
+
+    elif building_type == "bar":
+        # Neon tube pulse
+        neon = 0.5 + 0.5 * math.sin(anim_frame * 0.3)
+        nr = int(200 + 55 * neon)
+        ng = int(80 + 40 * neon)
+        nb = int(120 + 80 * neon)
+        for i in range(8):
+            nx = 22 + i * 6
+            set_pixel(s, nx, 14, (nr, ng, nb))
+            set_pixel(s, nx, 15, (nr, ng, nb))
+            set_pixel(s, nx, 16, (nr, ng, nb))
+
+    elif building_type == "house":
+        # Window glow
+        glow = 180 if (anim_frame // 4) % 2 == 0 else 220
+        draw_box(s, 10, 14, 6, 6, (glow, glow, 255), True)
+        draw_box(s, w - 16, 14, 6, 6, (glow, glow, 255), True)
+
+    elif building_type == "player_house":
+        glow = 180 if (anim_frame // 4) % 2 == 0 else 220
+        draw_box(s, 8, 16, 6, 6, (glow, glow, 255), True)
+        draw_box(s, w - 14, 16, 6, 6, (glow, glow, 255), True)
+
+    elif building_type == "well":
+        # Water shimmer
+        shimmer = int(60 * math.sin(anim_frame * 0.5))
+        for wx in range(10, 22, 4):
+            for wy in range(14, 20, 4):
+                b = 180 + shimmer
+                set_pixel(s, wx, wy, (120, b, 255))
+
+    elif building_type == "greenhouse":
+        # Plant pulse (deterministic per tile + frame)
+        pulse = int(30 * math.sin(anim_frame * 0.4))
+        for gy in range(3):
+            for gx in range(4):
+                px = 6 + gx * ((w - 12) // 4)
+                py = 6 + gy * ((h - 12) // 3)
+                pw = (w - 12) // 4 - 2
+                ph = (h - 12) // 3 - 2
+                for i in range(2):
+                    sx = px + 2 + ((gx * 7 + gy * 11 + i * 17 + anim_frame * 3) % max(1, pw - 4))
+                    sy = py + 2 + ((gy * 13 + gx * 5 + i * 19) % max(1, ph - 4))
+                    g = min(255, 140 + pulse + gy * 20)
+                    set_pixel(s, sx, sy, (60, g, 60))
+
+    elif building_type == "shipping_bin":
+        # Lid animation — flip up on frame 1
+        if anim_frame % 4 >= 2:
+            hline(s, 2, 0, 28, (100, 80, 50))
+            set_pixel(s, 16, 2, (180, 160, 80))
+            set_pixel(s, 16, 3, (200, 180, 100))
+
+    elif building_type == "barn":
+        # Weather vane rotation
+        vx, vy = w // 2, 2
+        angle = anim_frame * 0.3
+        dx = int(4 * math.cos(angle))
+        dy = int(4 * math.sin(angle))
+        set_pixel(s, vx + dx, vy + dy, (200, 180, 100))
+        set_pixel(s, vx - dx, vy - dy, (200, 180, 100))
+
     s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s
@@ -448,6 +867,205 @@ def get_building_surf(building_type):
             draw_box(s, rx, -roof_peak + dy + 1, rw, 1, (80, 55, 35), True)
         draw_box(s, 0, h - 4, w, 4, (80, 55, 30), True)
         draw_box(s, 1, h - 4, w - 2, 3, (100, 70, 40), True)
+    s.set_colorkey(BLACK)
+    SPRITE_CACHE[key] = s
+    return s
+
+def get_prop_surf(prop_type):
+    key = f"prop_{prop_type}"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
+    if prop_type == "lamp_post":
+        s = make_surface(TILE_SIZE, TILE_SIZE * 2)
+        hline(s, 12, 0, 8, (100, 100, 120))
+        draw_box(s, 13, 0, 6, 3, (180, 180, 200), True)
+        draw_box(s, 14, 3, 4, 20, (80, 80, 100), True)
+        draw_box(s, 15, 23, 2, 9, (100, 100, 120), True)
+        draw_box(s, 14, 32, 4, 28, (80, 80, 100), True)
+        draw_box(s, 15, 60, 2, 4, (100, 100, 120), True)
+        s.set_colorkey(BLACK)
+        SPRITE_CACHE[key] = s
+        return s
+    s = make_surface(TILE_SIZE, TILE_SIZE)
+    if prop_type == "bench":
+        draw_box(s, 2, 14, 28, 4, (100, 80, 55), True)
+        draw_box(s, 2, 18, 28, 4, (110, 90, 60), True)
+        draw_box(s, 4, 22, 4, 8, (80, 65, 45), True)
+        draw_box(s, 24, 22, 4, 8, (80, 65, 45), True)
+        draw_box(s, 14, 22, 4, 8, (80, 65, 45), True)
+        draw_box(s, 2, 12, 28, 2, (80, 65, 45), True)
+    elif prop_type == "fence":
+        draw_box(s, 4, 6, 24, 2, (100, 75, 50), True)
+        draw_box(s, 4, 14, 24, 2, (100, 75, 50), True)
+        draw_box(s, 6, 6, 2, 10, (80, 60, 40), True)
+        draw_box(s, 14, 6, 2, 10, (80, 60, 40), True)
+        draw_box(s, 22, 6, 2, 10, (80, 60, 40), True)
+    elif prop_type == "planter":
+        draw_box(s, 2, 18, 28, 14, (100, 75, 50), True)
+        draw_box(s, 3, 18, 26, 12, (80, 60, 40), True)
+        draw_box(s, 4, 8, 24, 12, (60, 120, 60), True)
+        draw_box(s, 6, 6, 20, 4, (80, 160, 80), True)
+        for i in range(3):
+            set_pixel(s, 10 + i * 6, 10, (200, 100, 200))
+            set_pixel(s, 12 + i * 4, 12, (100, 200, 100))
+    elif prop_type == "crate":
+        draw_box(s, 4, 8, 24, 24, (120, 85, 50), True)
+        draw_box(s, 5, 9, 22, 22, (140, 100, 60), True)
+        draw_box(s, 6, 10, 20, 20, (160, 115, 70), True)
+        draw_box(s, 4, 18, 24, 2, (100, 70, 40), True)
+        draw_box(s, 16, 8, 2, 24, (100, 70, 40), True)
+    elif prop_type == "signpost":
+        draw_box(s, 14, 10, 4, 22, (90, 70, 50), True)
+        draw_box(s, 4, 0, 24, 12, (120, 95, 60), True)
+        draw_box(s, 5, 1, 22, 10, (100, 80, 50), True)
+        draw_box(s, 6, 2, 20, 8, (80, 60, 40), True)
+    s.set_colorkey(BLACK)
+    SPRITE_CACHE[key] = s
+    return s
+
+def get_interior_surf(interior_type):
+    key = f"interior_{interior_type}"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
+    w, h = SCREEN_WIDTH, SCREEN_HEIGHT
+    s = make_surface(w, h)
+    wall = (40, 35, 55)
+    floor = (55, 50, 70)
+    dark = (30, 25, 45)
+
+    if interior_type == "kitchen":
+        wall = (50, 40, 60)
+        floor = (70, 55, 45)
+        draw_box(s, 0, 0, w, h, wall, True)
+        draw_box(s, 0, 300, w, 240, floor, True)
+        hline(s, 0, 300, w, (60, 45, 35))
+        # Counter
+        draw_box(s, 20, 180, 300, 120, (100, 85, 65), True)
+        draw_box(s, 20, 260, 300, 8, (140, 120, 90), True)
+        draw_box(s, 20, 180, 300, 10, (120, 100, 80), True)
+        # Stove
+        draw_box(s, 340, 200, 120, 100, (60, 60, 75), True)
+        draw_box(s, 350, 210, 30, 30, (200, 80, 60), True)
+        draw_box(s, 390, 210, 30, 30, (200, 80, 60), True)
+        draw_box(s, 430, 210, 20, 30, (80, 80, 100), True)
+        # Shelves
+        for sx in [480, 580, 680]:
+            draw_box(s, sx, 100, 60, 180, (80, 65, 55), True)
+            draw_box(s, sx, 100, 60, 6, (100, 85, 70), True)
+            draw_box(s, sx + 10, 120, 10, 10, (100, 200, 100), True)
+            draw_box(s, sx + 30, 140, 10, 15, (200, 100, 200), True)
+            draw_box(s, sx + 20, 200, 15, 10, (200, 200, 100), True)
+        # Window
+        draw_box(s, 200, 40, 160, 100, (100, 140, 200), True)
+        draw_box(s, 200, 40, 160, 100, (140, 180, 240), 2)
+        hline(s, 200, 90, 160, (140, 180, 240))
+        vline(s, 280, 40, 100, (140, 180, 240))
+
+    elif interior_type == "workshop":
+        wall = (55, 50, 60)
+        floor = (65, 60, 70)
+        draw_box(s, 0, 0, w, h, wall, True)
+        draw_box(s, 0, 320, w, 220, floor, True)
+        hline(s, 0, 320, w, (45, 40, 55))
+        # Workbench
+        draw_box(s, 30, 200, 400, 120, (120, 100, 75), True)
+        draw_box(s, 30, 200, 400, 10, (140, 120, 90), True)
+        draw_box(s, 30, 280, 400, 8, (100, 85, 60), True)
+        # Tools on wall
+        for ti in range(4):
+            tx = 80 + ti * 80
+            set_pixel(s, tx, 80, (180, 180, 200))
+            set_pixel(s, tx, 82, (180, 180, 200))
+            hline(s, tx - 3, 85, 6, (100, 80, 60))
+        # Anvil
+        draw_box(s, 500, 240, 80, 60, (100, 100, 110), True)
+        draw_box(s, 510, 230, 60, 20, (80, 80, 95), True)
+        draw_box(s, 520, 220, 40, 15, (120, 120, 130), True)
+        # Shelf
+        draw_box(s, 650, 80, 100, 200, (80, 70, 60), True)
+        draw_box(s, 650, 80, 100, 6, (100, 85, 70), True)
+        draw_box(s, 650, 140, 100, 6, (100, 85, 70), True)
+        draw_box(s, 650, 200, 100, 6, (100, 85, 70), True)
+
+    elif interior_type == "bar_interior":
+        wall = (45, 25, 30)
+        floor = (70, 55, 40)
+        draw_box(s, 0, 0, w, h, wall, True)
+        draw_box(s, 0, 320, w, 220, floor, True)
+        hline(s, 0, 320, w, (55, 40, 30))
+        # Bar counter
+        draw_box(s, 0, 180, w, 140, (100, 60, 50), True)
+        draw_box(s, 0, 180, w, 14, (130, 80, 65), True)
+        draw_box(s, 0, 290, w, 8, (80, 50, 40), True)
+        # Shelves with bottles
+        for sx in [50, 180, 310, 440, 570, 700]:
+            draw_box(s, sx, 100, 80, 80, (70, 50, 45), True)
+            draw_box(s, sx, 100, 80, 5, (90, 65, 55), True)
+            draw_box(s, sx + 20, 115, 8, 30, (100, 180, 100), True)
+            draw_box(s, sx + 50, 120, 8, 25, (200, 100, 100), True)
+            draw_box(s, sx + 35, 150, 10, 15, (180, 180, 100), True)
+        # Neon sign
+        for ni in range(5):
+            nx = 200 + ni * 100
+            draw_box(s, nx, 30, 80, 30, (100, 30, 50), True)
+            draw_box(s, nx + 5, 35, 70, 20, (200, 60, 80), True)
+            draw_box(s, nx + 10, 40, 60, 10, (255, 80, 100), True)
+
+    elif interior_type == "barn_interior":
+        wall = (50, 40, 25)
+        floor = (75, 60, 35)
+        draw_box(s, 0, 0, w, h, wall, True)
+        draw_box(s, 0, 340, w, 200, floor, True)
+        hline(s, 0, 340, w, (55, 45, 30))
+        # Hay bales
+        for hi in range(3):
+            hx = 80 + hi * 120
+            draw_box(s, hx, 260, 80, 80, (160, 150, 80), True)
+            draw_box(s, hx, 260, 80, 6, (180, 170, 100), True)
+        # Animal pens
+        for pi in range(2):
+            px = 400 + pi * 200
+            draw_box(s, px, 280, 140, 60, (60, 50, 35), False)
+            draw_box(s, px + 10, 320, 40, 20, (100, 120, 150), True)
+            draw_box(s, px + 90, 320, 40, 20, (180, 140, 100), True)
+        # Loft
+        draw_box(s, 0, 0, w, 60, (70, 55, 35), True)
+        draw_box(s, 0, 30, w, 6, (55, 40, 25), True)
+        for li in range(8):
+            set_pixel(s, 40 + li * 80, 10, (200, 180, 100))
+            set_pixel(s, 40 + li * 80, 20, (200, 180, 100))
+
+    elif interior_type == "hangar_interior":
+        wall = (60, 60, 75)
+        floor = (80, 80, 95)
+        draw_box(s, 0, 0, w, h, wall, True)
+        draw_box(s, 0, 360, w, 180, floor, True)
+        hline(s, 0, 360, w, (100, 100, 115))
+        # Ship bay
+        draw_box(s, 100, 120, 400, 240, (70, 70, 85), True)
+        draw_box(s, 90, 110, 420, 260, (90, 90, 105), 2)
+        # Ship silhouette placeholder
+        draw_box(s, 200, 200, 200, 100, (140, 140, 160), True)
+        draw_box(s, 220, 180, 160, 60, (160, 160, 180), True)
+        draw_box(s, 260, 160, 80, 40, (180, 180, 200), True)
+        # Control panel
+        draw_box(s, 600, 280, 200, 80, (50, 50, 65), True)
+        draw_box(s, 610, 290, 180, 60, (70, 70, 85), True)
+        for ci in range(5):
+            cx = 620 + ci * 35
+            set_pixel(s, cx, 310, (100, 255, 100))
+            set_pixel(s, cx, 320, (255, 100, 100))
+            set_pixel(s, cx + 10, 315, (100, 100, 255))
+        # Fuel pump
+        draw_box(s, 740, 360, 60, 100, (60, 60, 80), True)
+        draw_box(s, 750, 370, 40, 80, (80, 80, 100), True)
+        # Lights
+        for li in range(4):
+            lx = 100 + li * 200
+            set_pixel(s, lx, 50, (200, 200, 255))
+            set_pixel(s, lx + 1, 50, (200, 200, 255))
+            set_pixel(s, lx, 51, (200, 200, 255))
+
     s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s
@@ -684,3 +1302,21 @@ def get_bobber_surf():
     s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s
+
+def draw_panel(surf, x, y, w, h, border_color, title=None, alpha=180):
+    shadow = pygame.Surface((w, h))
+    shadow.set_alpha(60)
+    shadow.fill((0, 0, 0))
+    surf.blit(shadow, (x + 3, y + 3))
+    for i in range(h):
+        t = i / max(h - 1, 1)
+        r = int(15 * (1 - t) + 8 * t)
+        g = int(20 * (1 - t) + 10 * t)
+        b = int(40 * (1 - t) + 25 * t)
+        pygame.draw.line(surf, (r, g, b), (x, y + i), (x + w, y + i))
+    pygame.draw.rect(surf, border_color, (x, y, w, h), 2)
+    pygame.draw.line(surf, (r + 30, g + 30, b + 30), (x + 2, y + 2), (x + w - 3, y + 2))
+    if title:
+        from src.ui.context import draw_text
+        draw_text(surf, title, x + w // 2, y + 4, border_color, font_small, center=True)
+        pygame.draw.line(surf, border_color, (x + 10, y + 20), (x + w - 10, y + 20))

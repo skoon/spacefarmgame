@@ -8,6 +8,19 @@ from src.ui.input import handle_events
 
 
 def render():
+    shake_off_x = 0
+    shake_off_y = 0
+    if game.screen_shake > 0:
+        shake_off_x = random.randint(-game.screen_shake_intensity, game.screen_shake_intensity)
+        shake_off_y = random.randint(-game.screen_shake_intensity, game.screen_shake_intensity)
+        game.screen_shake -= 1
+
+    if shake_off_x != 0 or shake_off_y != 0:
+        offscreen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        offscreen.blit(screen, (0, 0))
+        screen.fill(BLACK)
+        screen.blit(offscreen, (shake_off_x, shake_off_y))
+
     if game.player.current_map == "farm":
         draw_farm()
     else:
@@ -19,6 +32,13 @@ def render():
     draw_message()
     draw_particles()
     draw_weather_particles()
+
+    if game.screen_flash > 0:
+        flash = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        flash.set_alpha(80)
+        flash.fill(game.screen_flash_color)
+        screen.blit(flash, (0, 0))
+        game.screen_flash -= 1
 
     if game.current_weather["name"] == "Void Fog":
         fog = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -84,6 +104,35 @@ def main():
         game.update_particles()
         game.update_weather_particles()
         game.update_fishing()
+
+        if game.overlay_alpha < game.overlay_target_alpha:
+            game.overlay_alpha = min(game.overlay_alpha + 15, game.overlay_target_alpha)
+        elif game.overlay_alpha > game.overlay_target_alpha:
+            game.overlay_alpha = max(game.overlay_alpha - 15, game.overlay_target_alpha)
+
+        game.anim_timer += 1
+        if game.anim_timer >= 8:
+            game.anim_timer = 0
+            game.anim_frame = (game.anim_frame + 1) % 2
+
+        if game.tool_use_timer > 0:
+            game.tool_use_timer -= 1
+            if game.tool_use_timer == 0:
+                game.anim_state = "idle"
+
+        game.player_anim_timer += 1
+        if game.anim_state == "walk":
+            threshold = 6
+        elif game.anim_state == "idle":
+            threshold = 24
+        else:
+            threshold = 999
+        if game.player_anim_timer >= threshold:
+            game.player_anim_timer = 0
+            if game.anim_state == "walk":
+                game.player_anim_frame = (game.player_anim_frame + 1) % 2
+            elif game.anim_state == "idle":
+                game.player_anim_frame = (game.player_anim_frame + 1) % 2
 
         if game.message_timer > 0:
             game.message_timer -= 1
