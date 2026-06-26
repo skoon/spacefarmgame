@@ -449,15 +449,11 @@ def handle_global_keydown(event):
     elif event.key == pygame.K_i:
         game.inventory_active = not game.inventory_active
     elif event.key == pygame.K_m:
-        if game.player.current_map == "farm":
-            game.player.current_map = "spaceport"
-            game.player.x = game.player.sp_x
-            game.player.y = game.player.sp_y
+        if game.player.current_map == "farm" and not game.transition_active:
+            game.start_transition("spaceport", game.player.sp_x, game.player.sp_y)
             game.set_message("Arrived at the Space Port!")
-        else:
-            game.player.current_map = "farm"
-            game.player.x = game.player.farm_x
-            game.player.y = game.player.farm_y
+        elif not game.transition_active:
+            game.start_transition("farm", game.player.farm_x, game.player.farm_y)
             game.set_message("Back on the farm!")
     elif event.key == pygame.K_g:
         if game.player.current_map == "spaceport":
@@ -549,6 +545,8 @@ def handle_movement():
         if test_rect.collidelist(solid_rects) == -1:
             game.player.y = new_y
 
+        if game.transition_active:
+            return
         if game.player.current_map == "farm":
             game.player.farm_x = game.player.x
             game.player.farm_y = game.player.y
@@ -557,11 +555,7 @@ def handle_movement():
             off_x = game.farm_off_x
             off_y = game.farm_off_y
             if py_t >= off_y + game.farm_rows + 1 and px_t >= off_x + game.farm_cols:
-                game.player.current_map = "spaceport"
-                game.player.x = 2 * TILE_SIZE
-                game.player.y = 16 * TILE_SIZE
-                game.player.sp_x = game.player.x
-                game.player.sp_y = game.player.y
+                game.start_transition("spaceport", 2 * TILE_SIZE, 16 * TILE_SIZE)
                 game.set_message("Welcome to the Space Port!")
         else:
             game.player.sp_x = game.player.x
@@ -569,11 +563,9 @@ def handle_movement():
             px_t = game.player.x // TILE_SIZE
             py_t = game.player.y // TILE_SIZE
             if px_t >= 28 and py_t >= 18:
-                game.player.current_map = "farm"
-                game.player.x = (game.farm_off_x + game.farm_cols + 1) * TILE_SIZE
-                game.player.y = (game.farm_off_y + game.farm_rows) * TILE_SIZE
-                game.player.farm_x = game.player.x
-                game.player.farm_y = game.player.y
+                to_x = (game.farm_off_x + game.farm_cols + 1) * TILE_SIZE
+                to_y = (game.farm_off_y + game.farm_rows) * TILE_SIZE
+                game.start_transition("farm", to_x, to_y)
                 game.set_message("Back on the farm!")
 
 

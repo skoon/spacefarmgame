@@ -139,11 +139,19 @@ def draw_particles():
             screen.blit(s, (px, py))
 
 def draw_weather_particles():
+    weather = game.current_weather["name"]
     for p in game.weather_particles:
         alpha = int(255 * p["life"] / max(p["max_life"], 1))
         size = p["size"]
+        c = p["color"]
+        x, y = int(p["x"]), int(p["y"])
+        if weather == "Meteor Shower" and size > 2:
+            pygame.draw.line(screen, (c[0], c[1], c[2] // 2), (x - int(p.get("vx", 0) * 3), y - int(p.get("vy", 0) * 3)), (x, y), max(1, size - 1))
+            glow = pygame.Surface((size + 4, size + 4))
+            glow.set_alpha(alpha // 3)
+            glow.fill(c)
+            screen.blit(glow, (x - 2, y - 2))
         s = pygame.Surface((size, size))
         s.set_alpha(alpha)
-        c = p["color"]
         s.fill(c)
-        screen.blit(s, (int(p["x"]), int(p["y"])))
+        screen.blit(s, (x, y))

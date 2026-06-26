@@ -97,11 +97,25 @@ class WorldSimMixin:
                     "color": (80, 60, 100),
                     "size": random.randint(8, 20),
                 })
+        elif weather == "Solar Flare":
+            if random.random() < 0.1:
+                self.weather_particles.append({
+                    "x": random.randint(0, SCREEN_WIDTH),
+                    "y": random.randint(0, SCREEN_HEIGHT),
+                    "vx": random.uniform(-0.2, 0.2),
+                    "vy": random.uniform(-0.5, -0.1),
+                    "life": random.randint(40, 80),
+                    "max_life": 80,
+                    "color": (255, 200, 100),
+                    "size": random.randint(1, 3),
+                })
         for p in self.weather_particles[:]:
             p["x"] += p["vx"]
             p["y"] += p["vy"]
             p["life"] -= 1
             if p["life"] <= 0 or p["y"] > SCREEN_HEIGHT + 20:
+                if weather == "Meteor Shower" and p.get("size", 0) >= 4 and p["y"] > SCREEN_HEIGHT - 40:
+                    self.shake_screen(4, 8)
                 self.weather_particles.remove(p)
 
     def shake_screen(self, intensity=3, duration=6):

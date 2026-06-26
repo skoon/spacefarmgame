@@ -174,22 +174,19 @@ def _build_astro_surf(direction, state, frame):
     base = list(_ASTRO_BASE[direction])
     pm = _ASTRO_PM
 
-    if state == "walk" and frame == 1:
-        # Apply stride overrides
+    if state == "walk" and frame in (1, 3):
         overrides = _ASTRO_WALK_STRIDE.get(direction, {})
         for row_idx, new_row in overrides.items():
             if row_idx < len(base):
                 base[row_idx] = new_row
 
     elif state == "idle" and frame == 1:
-        # Blink: remove visor shine (Y -> B)
         for i in range(len(base)):
             if 'Y' in base[i]:
                 base[i] = base[i].replace('Y', 'B')
                 break
 
     elif state == "tool":
-        # Tool index is passed as frame
         tool_idx = frame
         tool_px = _ASTRO_TOOL_PIXELS.get(tool_idx, {}).get(direction, [])
         for x, y, ch in tool_px:
@@ -206,11 +203,12 @@ def _build_astro_surf(direction, state, frame):
         return SPRITE_CACHE[key]
 
     s = make_surface(TILE_SIZE, TILE_SIZE)
-    # Determine max row length for centering
     max_w = max(len(r) for r in base)
     h = len(base)
     ox = (TILE_SIZE - max_w * 2) // 2
     oy = (TILE_SIZE - h * 2) // 2
+    if state == "walk" and frame in (1, 3):
+        oy += 1
     for dy, row in enumerate(base):
         for dx, ch in enumerate(row):
             c = pm.get(ch)
@@ -227,22 +225,30 @@ def _build_astro_surf(direction, state, frame):
     return s
 
 def get_astronaut_animated(direction="down", state="idle", frame=0):
-    key = "astro_anim"
+    key = f"astro_anim_{direction}_{state}_{frame}"
     if key in SPRITE_CACHE:
         return SPRITE_CACHE[key]
-    sheet_path = os.path.join("assets", "astro_32_shaded.png")
-    if os.path.exists(sheet_path):
-        s = pygame.image.load(sheet_path).convert_alpha()
-        s = scale_to_fill(s, 32, 32)
-    else:
-        s = make_surface(32, 32)
-        draw_box(s, 6, 4, 20, 24, (200, 200, 200), True)
-        draw_box(s, 10, 8, 12, 12, (100, 200, 255), True)
-        set_pixel(s, 12, 12, (255, 255, 255))
-        set_pixel(s, 20, 12, (255, 255, 255))
-        draw_box(s, 10, 22, 4, 6, (100, 100, 100), True)
-        draw_box(s, 18, 22, 4, 6, (100, 100, 100), True)
-        s.set_colorkey(BLACK)
+    base = get_astronaut_surf(direction)
+    s = base.copy()
+    if state == "walk" and frame in (1, 3):
+        pass
+    elif state == "idle" and frame == 1:
+        set_pixel(s, 12, 4, (180, 220, 255))
+        set_pixel(s, 13, 4, (180, 220, 255))
+        set_pixel(s, 17, 4, (180, 220, 255))
+        set_pixel(s, 18, 4, (180, 220, 255))
+    elif state == "tool":
+        if direction == "down":
+            if frame == 0:
+                draw_box(s, 24, 14, 6, 3, (160, 130, 80), True)
+                draw_box(s, 26, 10, 2, 4, (120, 100, 60), True)
+            elif frame == 1:
+                draw_box(s, 24, 10, 4, 6, (60, 120, 200), True)
+                draw_box(s, 22, 14, 2, 4, (100, 130, 180), True)
+            elif frame == 2:
+                draw_box(s, 24, 8, 2, 10, (140, 140, 140), True)
+                draw_box(s, 23, 14, 4, 3, (160, 160, 160), True)
+    s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s
 
@@ -570,55 +576,121 @@ def get_npc_v2(npc_id, color1, color2, direction="down", frame=0):
     SPRITE_CACHE[key] = s
     return s
 
-def get_tile_surf(tile_type, variant=0):
-    key = f"tile_{tile_type}_{variant}"
+SEASONAL_GRASS_SHIFT = {
+    "Nebula": (0, 0, 0),
+    "Void": (-10, -5, 10),
+    "Bloom": (10, 20, 5),
+    "Solar": (10, -5, -10),
+}
+
+SEASONAL_PATH_SHIFT = {
+    "Nebula": (0, 0, 0),
+    "Void": (-15, -10, 5),
+    "Bloom": (5, 10, 10),
+    "Solar": (15, 5, -10),
+}
+
+GRASS_PALETTES = [
+    [(50, 130, 50), (60, 140, 60), (70, 150, 70)],
+    [(40, 120, 60), (50, 130, 70), (65, 145, 80)],
+    [(60, 120, 40), (70, 130, 50), (80, 145, 60)],
+    [(55, 135, 55), (65, 145, 65), (50, 125, 50)],
+]
+
+PATH_PALETTES = [
+    [(160, 150, 140), (170, 160, 150), (150, 140, 130)],
+    [(150, 145, 135), (165, 155, 145), (145, 135, 125)],
+    [(170, 155, 135), (160, 145, 130), (155, 140, 120)],
+    [(140, 145, 145), (155, 155, 150), (145, 140, 135)],
+]
+
+def _apply_season_shift(r, g, b, season_name, palette="grass"):
+    if season_name:
+        shift = SEASONAL_GRASS_SHIFT if palette == "grass" else SEASONAL_PATH_SHIFT
+        s = shift.get(season_name, (0, 0, 0))
+        return (max(0, min(255, r + s[0])), max(0, min(255, g + s[1])), max(0, min(255, b + s[2])))
+    return (r, g, b)
+
+def get_tile_surf(tile_type, variant=0, season=None):
+    season_str = season or ""
+    key = f"tile_{tile_type}_{variant}_{season_str}"
     if key in SPRITE_CACHE:
         return SPRITE_CACHE[key]
     s = make_surface(TILE_SIZE, TILE_SIZE)
     if tile_type == "grass":
-        shades = [(50, 130, 50), (60, 140, 60), (70, 150, 70)]
+        shades = GRASS_PALETTES[variant % len(GRASS_PALETTES)]
         for y in range(TILE_SIZE):
             for x in range(TILE_SIZE):
                 c = shades[(x + y + variant) % 3]
+                c = _apply_season_shift(c[0], c[1], c[2], season, "grass")
                 set_pixel(s, x, y, c)
-        for _ in range(6):
-            sx, sy = (variant * 7 + _ * 5) % TILE_SIZE, (_ * 11 + variant * 3) % TILE_SIZE
-            set_pixel(s, sx, sy, (40, 180, 40))
+        tuft_count = 4 + variant
+        for _ in range(tuft_count):
+            sx = (variant * 13 + _ * 7) % TILE_SIZE
+            sy = (_ * 9 + variant * 5) % TILE_SIZE
+            tc = _apply_season_shift(30, 160 + variant * 10, 30, season, "grass")
+            set_pixel(s, sx, sy, tc)
+            if sx + 1 < TILE_SIZE:
+                tc2 = _apply_season_shift(35, 170 + variant * 8, 35, season, "grass")
+                set_pixel(s, sx + 1, sy, tc2)
     elif tile_type == "path":
+        shades = PATH_PALETTES[variant % len(PATH_PALETTES)]
         for y in range(TILE_SIZE):
             for x in range(TILE_SIZE):
-                c = (160 + (x + y) % 3 * 10, 150 + (x + y) % 3 * 10, 140 + (x + y) % 3 * 10)
+                c = shades[(x + y + variant) % 3]
+                c = _apply_season_shift(c[0], c[1], c[2], season, "path")
+                if variant > 0 and random.random() < 0.02:
+                    c = (c[0] - 20, c[1] - 15, c[2] - 10)
                 set_pixel(s, x, y, c)
+        if variant % 2 == 0:
+            for _ in range(3):
+                cx = random.randint(4, 27)
+                cy = random.randint(4, 27)
+                for dx in range(-1, 2):
+                    for dy in range(-1, 2):
+                        px, py = cx + dx, cy + dy
+                        if 0 <= px < TILE_SIZE and 0 <= py < TILE_SIZE:
+                            set_pixel(s, px, py, (120, 110, 95))
     elif tile_type == "untilled":
+        base_shade = (SOIL_BROWN[0] - variant * 5, SOIL_BROWN[1] - variant * 3, SOIL_BROWN[2] + variant * 2)
         for y in range(TILE_SIZE):
             for x in range(TILE_SIZE):
-                shade = SOIL_BROWN
-                if (x + y) % 4 == 0:
+                shade = base_shade
+                if (x + y + variant) % 4 == 0:
                     shade = (shade[0] - 10, shade[1] - 10, shade[2] - 10)
-                if (x + y) % 5 == 0:
+                if (x + y + variant * 3) % 5 == 0:
                     shade = (shade[0] + 10, shade[1] + 10, shade[2] + 5)
                 set_pixel(s, x, y, shade)
+        if variant == 0:
+            for _ in range(4):
+                sx, sy = random.randint(0, TILE_SIZE - 1), random.randint(0, TILE_SIZE - 1)
+                set_pixel(s, sx, sy, (90, 140, 60))
     elif tile_type == "tilled":
+        base_r, base_g, base_b = DARK_BROWN
+        row_offset = variant * 2
         for y in range(TILE_SIZE):
             for x in range(TILE_SIZE):
-                shade = (DARK_BROWN[0] + (x % 4) * 5, DARK_BROWN[1] + (x % 4) * 3, DARK_BROWN[2] + (y % 3) * 3)
+                shade = (base_r + (x + row_offset) % 4 * 5, base_g + (x + row_offset) % 4 * 3, base_b + (y + variant) % 3 * 3)
                 set_pixel(s, x, y, shade)
         for row in range(4):
             yy = 4 + row * 7
+            furrow_c = (80 - variant * 5, 50 - variant * 3, 20)
             for x in range(TILE_SIZE):
-                set_pixel(s, x, yy, (80, 50, 20))
+                set_pixel(s, x, yy, furrow_c)
     elif tile_type == "watered":
+        water_tint = [(60, 100, 180), (40, 120, 190), (80, 90, 170)]
+        wt = water_tint[variant % len(water_tint)]
         for y in range(TILE_SIZE):
             for x in range(TILE_SIZE):
-                blend = 0.7 + 0.3 * ((x + y) % 4) / 4.0
-                r = int(DARK_BROWN[0] * (1 - blend) + WATER_BLUE[0] * blend)
-                g = int(DARK_BROWN[1] * (1 - blend) + WATER_BLUE[1] * blend)
-                b = int(DARK_BROWN[2] * (1 - blend) + WATER_BLUE[2] * blend)
+                blend = 0.6 + 0.4 * ((x + y + variant) % 4) / 4.0
+                r = int(DARK_BROWN[0] * (1 - blend) + wt[0] * blend)
+                g = int(DARK_BROWN[1] * (1 - blend) + wt[1] * blend)
+                b = int(DARK_BROWN[2] * (1 - blend) + wt[2] * blend)
                 set_pixel(s, x, y, (r, g, b))
         for row in range(4):
             yy = 4 + row * 7
             for x in range(TILE_SIZE):
-                set_pixel(s, x, yy, (50, 80, 140))
+                set_pixel(s, x, yy, (40 + variant * 5, 70 + variant * 5, 130 + variant * 5))
     SPRITE_CACHE[key] = s
     return s
 
@@ -710,6 +782,35 @@ def get_crop_surf(crop_key, stage, total_stages):
         draw_box(s, 13, base_y - 4, 6, 6, color, True)
         draw_box(s, 14, base_y - 6, 4, 3, (40, 180, 40), True)
     s.set_colorkey(BLACK)
+    SPRITE_CACHE[key] = s
+    return s
+
+def get_clean_building(building_type):
+    key = f"clean_building_{building_type}"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
+    sheet_name = SHEET_BUILDING.get(building_type)
+    if sheet_name and os.path.exists(os.path.join("assets", sheet_name)):
+        bw, bh = BUILDING_TYPES.get(building_type, {}).get("size", (3, 3))
+        w, h = bw * TILE_SIZE, bh * TILE_SIZE
+        sheet_surf = load_sprite_sheet(sheet_name)
+        base = pygame.Surface((w, h), pygame.SRCALPHA)
+        col, row = BUILDING_FRAME_MAP.get("default", (1, 1))
+        base.blit(sheet_surf, (0, 0), (col * 96, row * 96, w, h))
+        SPRITE_CACHE[key] = base
+        return base
+    key_96 = f"building_96_{building_type}"
+    if key_96 not in SPRITE_CACHE:
+        sheet_96_path = os.path.join("assets", f"building_{building_type}_96.png")
+        if os.path.exists(sheet_96_path):
+            raw = pygame.image.load(sheet_96_path).convert_alpha()
+            bw, bh = BUILDING_TYPES.get(building_type, {}).get("size", (3, 3))
+            w, h = bw * TILE_SIZE, bh * TILE_SIZE
+            SPRITE_CACHE[key_96] = scale_to_fill(raw, w, h)
+    if key_96 in SPRITE_CACHE:
+        s = SPRITE_CACHE[key_96].copy()
+    else:
+        s = get_building_surf(building_type)
     SPRITE_CACHE[key] = s
     return s
 
@@ -1081,6 +1182,46 @@ def get_prop_surf(prop_type):
         draw_box(s, 4, 0, 24, 12, (120, 95, 60), True)
         draw_box(s, 5, 1, 22, 10, (100, 80, 50), True)
         draw_box(s, 6, 2, 20, 8, (80, 60, 40), True)
+    s.set_colorkey(BLACK)
+    SPRITE_CACHE[key] = s
+    return s
+
+DECORATION_PIXEL_DATA = {
+    "flower_pink": [(8, 8, (255, 100, 150)), (9, 8, (255, 120, 170)), (8, 9, (255, 80, 130)),
+                    (10, 9, (255, 140, 180)), (9, 10, (200, 60, 100))],
+    "flower_yellow": [(8, 8, (255, 220, 50)), (9, 8, (255, 240, 80)), (8, 9, (255, 200, 30)),
+                      (10, 9, (255, 255, 100)), (9, 10, (220, 180, 20))],
+    "flower_purple": [(8, 8, (180, 80, 255)), (9, 8, (200, 100, 255)), (8, 9, (160, 60, 230)),
+                      (10, 9, (220, 140, 255)), (9, 10, (140, 40, 200))],
+    "flower_blue": [(8, 8, (80, 140, 255)), (9, 8, (100, 160, 255)), (8, 9, (60, 120, 230)),
+                    (10, 9, (140, 200, 255)), (9, 10, (40, 100, 200))],
+    "rock_small": [(14, 12, (130, 125, 120)), (15, 12, (140, 135, 130)), (14, 13, (120, 115, 110)),
+                   (15, 13, (135, 130, 125))],
+    "rock_medium": [(10, 10, (140, 135, 130)), (11, 10, (150, 145, 140)), (12, 10, (145, 140, 135)),
+                    (10, 11, (130, 125, 120)), (11, 11, (145, 140, 135)), (12, 11, (140, 135, 130)),
+                    (10, 12, (120, 115, 110)), (11, 12, (135, 130, 125)), (12, 12, (130, 125, 120))],
+    "rock_large": [(8, 8, (140, 135, 130)), (9, 8, (150, 145, 140)), (10, 8, (155, 150, 145)), (11, 8, (145, 140, 135)),
+                   (8, 9, (135, 130, 125)), (9, 9, (150, 145, 140)), (10, 9, (160, 155, 150)), (11, 9, (150, 145, 140)),
+                   (8, 10, (130, 125, 120)), (9, 10, (145, 140, 135)), (10, 10, (155, 150, 145)), (11, 10, (145, 140, 135)),
+                   (8, 11, (120, 115, 110)), (9, 11, (135, 130, 125)), (10, 11, (140, 135, 130)), (11, 11, (130, 125, 120))],
+    "grass_tuft": [(12, 6, (40, 170, 40)), (12, 5, (50, 180, 50)), (13, 7, (45, 175, 45)),
+                   (13, 4, (55, 190, 55)), (14, 6, (50, 185, 50)), (15, 5, (60, 200, 60))],
+    "mushroom": [(10, 8, (200, 180, 160)), (11, 8, (220, 200, 180)), (10, 9, (180, 160, 140)),
+                 (11, 9, (200, 180, 160)),
+                 (9, 8, (220, 80, 100)), (10, 7, (240, 100, 120)), (11, 7, (230, 90, 110)), (12, 8, (210, 70, 90))],
+    "crystal": [(10, 6, (150, 200, 255)), (11, 5, (180, 220, 255)), (10, 7, (130, 180, 240)),
+                (11, 6, (170, 210, 255)), (12, 6, (200, 230, 255)), (10, 8, (110, 160, 230)),
+                (11, 7, (160, 200, 250)), (12, 7, (180, 220, 255)), (11, 8, (140, 190, 245))],
+}
+
+def get_decoration_surf(deco_type):
+    key = f"deco_{deco_type}"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
+    s = make_surface(TILE_SIZE, TILE_SIZE)
+    pixels = DECORATION_PIXEL_DATA.get(deco_type, [])
+    for x, y, color in pixels:
+        set_pixel(s, x, y, color)
     s.set_colorkey(BLACK)
     SPRITE_CACHE[key] = s
     return s

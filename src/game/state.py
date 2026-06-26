@@ -130,10 +130,45 @@ class GameState(FarmingMixin, ExplorationMixin, BuildingsMixin, AnimalsMixin, Ki
         self.player_anim_frame = 0
         self.player_anim_timer = 0
         self.tool_use_timer = 0
+        # Screen transition (M20)
+        self.transition_active = False
+        self.transition_progress = 0.0
+        self.transition_target_map = None
+        self.transition_from_x = 0
+        self.transition_from_y = 0
+        self.transition_to_x = 0
+        self.transition_to_y = 0
 
     def set_message(self, msg):
         self.message = msg
         self.message_timer = 120
+
+    def start_transition(self, target_map, to_x, to_y, from_x=None, from_y=None):
+        self.transition_active = True
+        self.transition_progress = 0.0
+        self.transition_target_map = target_map
+        self.transition_to_x = to_x
+        self.transition_to_y = to_y
+        self.transition_from_x = from_x if from_x is not None else self.player.x
+        self.transition_from_y = from_y if from_y is not None else self.player.y
+
+    def update_transition(self):
+        if not self.transition_active:
+            return
+        self.transition_progress += 0.04
+        if self.transition_progress >= 0.5 and self.player.current_map != self.transition_target_map:
+            self.player.current_map = self.transition_target_map
+            self.player.x = self.transition_to_x
+            self.player.y = self.transition_to_y
+            if self.transition_target_map == "farm":
+                self.player.farm_x = self.transition_to_x
+                self.player.farm_y = self.transition_to_y
+            else:
+                self.player.sp_x = self.transition_to_x
+                self.player.sp_y = self.transition_to_y
+        if self.transition_progress >= 1.0:
+            self.transition_active = False
+            self.transition_target_map = None
 
     def advance_time(self, amount=0.25):
         self.time_progress += amount

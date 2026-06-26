@@ -257,7 +257,7 @@ def update_season(self):
 
 ---
 
-## Milestone 16 — Player Sprite Animation System ⏳
+## Milestone 16 — Player Sprite Animation System ✓
 
 **Goal:** Replace the single-frame static astronaut with full walk-cycle animation, idle breathing, and tool-use poses.
 
@@ -393,7 +393,7 @@ NPC_PIXEL_DATA = {
 
 ---
 
-## Milestone 19 — Item, Crop & Icon System ⏳
+## Milestone 19 — Item, Crop & Icon System ✓
 
 **Goal:** Distinct 16×16 pixel-art icons for every item, reworked crop sprites with per-crop pixel data, and proper animal/bot/ship sprites.
 
@@ -431,7 +431,7 @@ NPC_PIXEL_DATA = {
 
 ---
 
-## Milestone 20 — Environment Tileset & Background Art ⏳
+## Milestone 20 — Environment Tileset & Background Art ✓
 
 **Goal:** Varied tiles, seasonal ground cover, animated water, weather VFX, parallax backgrounds, and screen transition effects.
 

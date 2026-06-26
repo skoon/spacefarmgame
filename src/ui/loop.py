@@ -46,6 +46,16 @@ def render():
         fog.fill((60, 40, 80))
         screen.blit(fog, (0, 0))
 
+    if game.transition_active:
+        p = game.transition_progress
+        if p < 0.5:
+            wipe_w = int(SCREEN_WIDTH * (p * 2))
+        else:
+            wipe_w = int(SCREEN_WIDTH * ((1.0 - p) * 2))
+        wipe = pygame.Surface((wipe_w, SCREEN_HEIGHT))
+        wipe.fill((5, 5, 20))
+        screen.blit(wipe, (0, 0))
+
     if game.dialogue_active:
         draw_dialogue()
     if game.shop_active:
@@ -110,6 +120,8 @@ def main():
         elif game.overlay_alpha > game.overlay_target_alpha:
             game.overlay_alpha = max(game.overlay_alpha - 15, game.overlay_target_alpha)
 
+        game.update_transition()
+
         game.anim_timer += 1
         if game.anim_timer >= 8:
             game.anim_timer = 0
@@ -124,13 +136,13 @@ def main():
         if game.anim_state == "walk":
             threshold = 6
         elif game.anim_state == "idle":
-            threshold = 24
+            threshold = 12
         else:
             threshold = 999
         if game.player_anim_timer >= threshold:
             game.player_anim_timer = 0
             if game.anim_state == "walk":
-                game.player_anim_frame = (game.player_anim_frame + 1) % 2
+                game.player_anim_frame = (game.player_anim_frame + 1) % 4
             elif game.anim_state == "idle":
                 game.player_anim_frame = (game.player_anim_frame + 1) % 2
 
