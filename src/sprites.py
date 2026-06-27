@@ -611,12 +611,80 @@ def _apply_season_shift(r, g, b, season_name, palette="grass"):
         return (max(0, min(255, r + s[0])), max(0, min(255, g + s[1])), max(0, min(255, b + s[2])))
     return (r, g, b)
 
+OUTSIDE_TILESET = None
+OUTSIDE_TILESET_LOADED = False
+
+OUTSIDE_TILE_MAP = {
+    "grass": [(4, 9), (4, 9), (4, 9), (1, 4)],
+    "path": [(10, 1), (10, 1), (10, 1), (10, 1)],
+    "untilled": [(3, 2), (4, 2), (5, 3)],
+    "tilled": [(10, 5), (10, 6), (10, 7)],
+    "watered": [(4, 3), (5, 3), (3, 2)],
+}
+
+def load_outside_tileset(path="outside.png"):
+    global OUTSIDE_TILESET, OUTSIDE_TILESET_LOADED
+    if OUTSIDE_TILESET_LOADED:
+        return OUTSIDE_TILESET
+    full = os.path.join("assets", path)
+    if os.path.exists(full):
+        OUTSIDE_TILESET = pygame.image.load(full).convert_alpha()
+        OUTSIDE_TILESET_LOADED = True
+    return OUTSIDE_TILESET
+
+def get_outside_tile(col, row):
+    load_outside_tileset()
+    if OUTSIDE_TILESET is None:
+        return None
+    key = f"outside_tile_{col}_{row}"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
+    rect = pygame.Rect(col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+    tile = OUTSIDE_TILESET.subsurface(rect)
+    SPRITE_CACHE[key] = tile
+    return tile
+
+def _apply_season_shift_to_tile(tile, season_name, shift_map):
+    if not season_name or season_name not in shift_map:
+        return tile
+    key = f"season_shifted_{id(tile)}_{season_name}"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
+    s = tile.copy()
+    dr, dg, db = shift_map[season_name]
+    for y in range(TILE_SIZE):
+        for x in range(TILE_SIZE):
+            ca = s.get_at((x, y))
+            if ca[3] > 0:
+                nr = max(0, min(255, ca[0] + dr))
+                ng = max(0, min(255, ca[1] + dg))
+                nb = max(0, min(255, ca[2] + db))
+                s.set_at((x, y), (nr, ng, nb, ca[3]))
+    SPRITE_CACHE[key] = s
+    return s
+
+SEASONAL_TILE_SHIFTS = {
+    "grass": SEASONAL_GRASS_SHIFT,
+    "path": SEASONAL_PATH_SHIFT,
+}
+
 def get_tile_surf(tile_type, variant=0, season=None):
     season_str = season or ""
-    key = f"tile_{tile_type}_{variant}_{season_str}"
+    key = f"tile_{tile_type}_{variant}_{season_str}_{int(OUTSIDE_TILESET_LOADED)}"
     if key in SPRITE_CACHE:
         return SPRITE_CACHE[key]
     s = make_surface(TILE_SIZE, TILE_SIZE)
+    mapping = OUTSIDE_TILE_MAP.get(tile_type)
+    if mapping and OUTSIDE_TILESET_LOADED:
+        col, row = mapping[variant % len(mapping)]
+        src = get_outside_tile(col, row)
+        if src:
+            if season and tile_type in SEASONAL_TILE_SHIFTS:
+                s = _apply_season_shift_to_tile(src, season, SEASONAL_TILE_SHIFTS[tile_type])
+            else:
+                s = src
+            SPRITE_CACHE[key] = s
+            return s
     if tile_type == "grass":
         shades = GRASS_PALETTES[variant % len(GRASS_PALETTES)]
         for y in range(TILE_SIZE):
@@ -693,6 +761,41 @@ def get_tile_surf(tile_type, variant=0, season=None):
                 set_pixel(s, x, yy, (40 + variant * 5, 70 + variant * 5, 130 + variant * 5))
     SPRITE_CACHE[key] = s
     return s
+
+SCIFI_CREATURES = None
+SCIFI_CREATURES_LOADED = False
+
+SCIFI_CREATURES_COLS = 4
+SCIFI_CREATURES_ROWS = 30
+
+def load_scifi_creatures(path="SciFiCreatures_NES_4x30_alphaBG.png"):
+    global SCIFI_CREATURES, SCIFI_CREATURES_LOADED
+    if SCIFI_CREATURES_LOADED:
+        return SCIFI_CREATURES
+    full = os.path.join("assets", path)
+    if os.path.exists(full):
+        SCIFI_CREATURES = pygame.image.load(full).convert_alpha()
+        SCIFI_CREATURES_LOADED = True
+    return SCIFI_CREATURES
+
+def get_scifi_creature_surf(col, row):
+    load_scifi_creatures()
+    if SCIFI_CREATURES is None:
+        return None
+    key = f"scifi_creature_{col}_{row}"
+    if key in SPRITE_CACHE:
+        return SPRITE_CACHE[key]
+    rect = pygame.Rect(col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+    sprite = SCIFI_CREATURES.subsurface(rect)
+    SPRITE_CACHE[key] = sprite
+    return sprite
+
+def get_scifi_creature_by_index(index):
+    col = index % SCIFI_CREATURES_COLS
+    row = index // SCIFI_CREATURES_COLS
+    if row >= SCIFI_CREATURES_ROWS:
+        return None
+    return get_scifi_creature_surf(col, row)
 
 CROP_PIXEL_DATA = {
     "glowroot": {

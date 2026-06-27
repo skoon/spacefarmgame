@@ -1,7 +1,10 @@
 from src.ui.context import game
 from src.ui.loop import main
+from src.sprites import load_outside_tileset, load_scifi_creatures
 
 # Bootstrap: load slot 0 if present, otherwise seed a fresh game.
+load_outside_tileset()
+load_scifi_creatures()
 if game.load_game(0):
     game.save_menu_slot = 0
 else:
